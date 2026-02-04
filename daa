@@ -2002,8 +2002,7 @@ do
         }
 
         if KeyPicker.Mode == "Press" then
-            assert(ParentObj.Type == "Label", "KeyPicker with the mode 'Press' can be only applied on Labels.")
-
+            -- Note: Labels AND Buttons are compatible with 'Press' now
             KeyPicker.SyncToggleState = false
             Info.Modes = { "Press" }
             Info.Mode = "Press"
@@ -2962,7 +2961,7 @@ do
                 end
 
                 RunService.RenderStepped:Wait()
-            end
+            end)
         end)
         if TransparencySelector then
             TransparencySelector.InputBegan:Connect(function(Input: InputObject)
@@ -3501,6 +3500,29 @@ do
             table.insert(Buttons, Button)
         end
 
+        return Button
+    end
+
+    function Funcs:AddKeybindButton(Idx, Info)
+        -- Initialize the standard button
+        local Button = self:AddButton(Idx, Info)
+        
+        -- Parent the Picker to the button's background
+        Button.TextLabel = Button.Base 
+        
+        -- Enable KeyPicker support
+        setmetatable(Button, BaseAddons)
+        
+        -- Add KeyPicker as an internal component
+        Button:AddKeyPicker(Idx .. "_Key", {
+            Default = Info.Default or "None",
+            Mode = "Press", 
+            Text = Info.Text,
+            Callback = function()
+                Library:SafeCallback(Button.Func)
+            end
+        })
+        
         return Button
     end
 
@@ -5607,92 +5629,6 @@ do
         return DepGroupbox
     end
 
-    function Funcs:AddKeybindButton(Idx, Info)
-        local Groupbox = self
-        local Container = Groupbox.Container
-
-        local Data = {
-            Text = Info.Text or "Button",
-            Callback = Info.Callback or function() end,
-            Type = "KeybindButton",
-        }
-
-        -- Create the Holder (acting as the button itself)
-        local Button = New("TextButton", {
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 0, 18),
-            Text = "",
-            Parent = Container,
-        })
-
-        -- Create the Label
-        local Label = New("TextLabel", {
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 1, 0),
-            Position = UDim2.fromOffset(0, 0),
-            Text = Data.Text,
-            TextSize = 14,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            TextTransparency = 0.4,
-            Parent = Button,
-        })
-
-        -- Apply ListLayout for alignment (standard Obsidian behavior)
-        New("UIListLayout", {
-            FillDirection = Enum.FillDirection.Horizontal,
-            HorizontalAlignment = Enum.HorizontalAlignment.Right,
-            Padding = UDim.new(0, 6),
-            Parent = Label,
-        })
-
-        -- Function to animate/update visuals
-        function Data:UpdateColors()
-            if Library.Unloaded then return end
-            -- Optional: Add visual flair here if needed
-        end
-
-        function Data:SetText(Text)
-            Data.Text = Text
-            Label.Text = Text
-        end
-        
-        -- Animation Logic (Hover Effect)
-        Button.MouseEnter:Connect(function()
-            if Library.Scheme then 
-                TweenService:Create(Label, Library.TweenInfo, { TextTransparency = 0 }):Play()
-            end
-        end)
-        
-        Button.MouseLeave:Connect(function()
-             if Library.Scheme then 
-                TweenService:Create(Label, Library.TweenInfo, { TextTransparency = 0.4 }):Play()
-             end
-        end)
-
-        -- Handle Mouse Click (Trigger Callback manually)
-        Button.MouseButton1Click:Connect(function()
-            Data.Callback()
-        end)
-
-        Groupbox:Resize()
-        
-        -- Essential for KeyPicker addon:
-        Data.TextLabel = Label 
-        Data.Container = Container
-        setmetatable(Data, BaseAddons) -- Enable .AddKeyPicker support
-
-        -- Register in options
-        Data.Holder = Button
-        table.insert(Groupbox.Elements, Data)
-        if Idx then Options[Idx] = Data end
-
-        -- Immediately attach the KeyPicker using the info provided
-        -- Enforcing "Press" mode makes it act like a button keybind (no toggle state)
-        Info.Mode = "Press" 
-        
-        return Data:AddKeyPicker(Idx, Info)
-    end
-    
     BaseGroupbox.__index = Funcs
     BaseGroupbox.__namecall = function(_, Key, ...)
         return Funcs[Key](...)
@@ -5895,7 +5831,7 @@ function Library:Notify(...)
         BorderSizePixel = 1,
         Position = UDim2.fromOffset(0, 3),
         Size = UDim2.new(1, 0, 0, 2),
-        Parent = TimerHolder,
+        Parent = TimerBar,
     })
     TimerFill = New("Frame", {
         BackgroundColor3 = "AccentColor",
