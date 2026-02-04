@@ -2002,7 +2002,8 @@ do
         }
 
         if KeyPicker.Mode == "Press" then
-            -- Note: Labels AND Buttons are compatible with 'Press' now
+            assert(ParentObj.Type == "Label", "KeyPicker with the mode 'Press' can be only applied on Labels.")
+
             KeyPicker.SyncToggleState = false
             Info.Modes = { "Press" }
             Info.Mode = "Press"
@@ -2961,7 +2962,7 @@ do
                 end
 
                 RunService.RenderStepped:Wait()
-            end)
+            end
         end)
         if TransparencySelector then
             TransparencySelector.InputBegan:Connect(function(Input: InputObject)
@@ -3525,7 +3526,7 @@ do
         
         return Button
     end
-
+    
     function Funcs:AddCheckbox(Idx, Info)
         Info = Library:Validate(Info, Templates.Toggle)
 
@@ -5629,6 +5630,7 @@ do
         return DepGroupbox
     end
 
+    
     BaseGroupbox.__index = Funcs
     BaseGroupbox.__namecall = function(_, Key, ...)
         return Funcs[Key](...)
@@ -5831,7 +5833,7 @@ function Library:Notify(...)
         BorderSizePixel = 1,
         Position = UDim2.fromOffset(0, 3),
         Size = UDim2.new(1, 0, 0, 2),
-        Parent = TimerBar,
+        Parent = TimerHolder,
     })
     TimerFill = New("Frame", {
         BackgroundColor3 = "AccentColor",
