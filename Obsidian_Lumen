@@ -2454,6 +2454,14 @@ do
 
         local ParentObj = self
         local ToggleLabel = ParentObj.TextLabel
+        if ToggleLabel and not ToggleLabel:FindFirstChildOfClass("UIListLayout") then
+            New("UIListLayout", {
+                FillDirection = Enum.FillDirection.Horizontal,
+                HorizontalAlignment = Enum.HorizontalAlignment.Right,
+                Padding = UDim.new(0, 6),
+                Parent = ToggleLabel,
+            })
+        end
 
         local KeyPicker = {
             Text = Info.Text,
@@ -2474,7 +2482,10 @@ do
         }
 
         if KeyPicker.Mode == "Press" then
-            assert(ParentObj.Type == "Label", "KeyPicker with the mode 'Press' can be only applied on Labels.")
+            assert(
+                ParentObj.Type == "Label" or ParentObj.Type == "Button" or ParentObj.Type == "SubButton",
+                "KeyPicker with the mode 'Press' can be only applied on Labels or Buttons."
+            )
 
             KeyPicker.SyncToggleState = false
             Info.Modes = { "Press" }
@@ -3746,6 +3757,7 @@ do
             Risky = Info.Risky,
             Disabled = Info.Disabled,
             Visible = Info.Visible,
+            Addons = {},
 
             Tween = nil,
             Type = "Button",
@@ -3785,6 +3797,75 @@ do
             return Base, Stroke
         end
 
+        local function SetupButtonActions(Target)
+            Target.Addons = Target.Addons or {}
+            Target.ActivateEvent = Instance.new("BindableEvent")
+
+            function Target:Activate()
+                if Target.Disabled then
+                    return
+                end
+
+                if Target.ActivateEvent then
+                    Target.ActivateEvent:Fire()
+                end
+
+                if Target.Locked then
+                    return
+                end
+
+                if Target.DoubleClick then
+                    Target.Locked = true
+
+                    Target.Base.Text = "Are you sure?"
+                    Target.Base.TextColor3 = Library.Scheme.AccentColor
+                    Library.Registry[Target.Base].TextColor3 = "AccentColor"
+
+                    local Clicked = WaitForEvent(Target.ActivateEvent.Event, 0.5)
+
+                    Target.Base.Text = Target.Text
+                    Target.Base.TextColor3 = Target.Risky and Library.Scheme.RedColor or Library.Scheme.FontColor
+                    Library.Registry[Target.Base].TextColor3 = Target.Risky and "RedColor" or "FontColor"
+
+                    if Clicked then
+                        Library:SafeCallback(Target.Func)
+                    end
+
+                    RunService.RenderStepped:Wait() --// Mouse Button fires without waiting (i hate roblox)
+                    Target.Locked = false
+                    return
+                end
+
+                Library:SafeCallback(Target.Func)
+            end
+
+            function Target:AddKeybind(Idx, Info)
+                if typeof(Info) ~= "table" then
+                    Info = {}
+                end
+
+                if Info.Text == nil then
+                    Info.Text = Target.Text
+                end
+
+                if Info.Mode == nil then
+                    Info.Mode = "Press"
+                end
+
+                if Info.Modes == nil and Info.Mode == "Press" then
+                    Info.Modes = { "Press" }
+                end
+
+                if Info.Callback == nil then
+                    Info.Callback = function()
+                        Target:Activate()
+                    end
+                end
+
+                return BaseAddons.__index.AddKeyPicker(Target, Idx, Info)
+            end
+        end
+
         local function InitEvents(Button)
             Button.Base.MouseEnter:Connect(function()
                 if Button.Disabled then
@@ -3808,37 +3889,13 @@ do
             end)
 
             Button.Base.MouseButton1Click:Connect(function()
-                if Button.Disabled or Button.Locked then
-                    return
-                end
-
-                if Button.DoubleClick then
-                    Button.Locked = true
-
-                    Button.Base.Text = "Are you sure?"
-                    Button.Base.TextColor3 = Library.Scheme.AccentColor
-                    Library.Registry[Button.Base].TextColor3 = "AccentColor"
-
-                    local Clicked = WaitForEvent(Button.Base.MouseButton1Click, 0.5)
-
-                    Button.Base.Text = Button.Text
-                    Button.Base.TextColor3 = Button.Risky and Library.Scheme.RedColor or Library.Scheme.FontColor
-                    Library.Registry[Button.Base].TextColor3 = Button.Risky and "RedColor" or "FontColor"
-
-                    if Clicked then
-                        Library:SafeCallback(Button.Func)
-                    end
-
-                    RunService.RenderStepped:Wait() --// Mouse Button fires without waiting (i hate roblox)
-                    Button.Locked = false
-                    return
-                end
-
-                Library:SafeCallback(Button.Func)
+                Button:Activate()
             end)
         end
 
         Button.Base, Button.Stroke = CreateButton(Button)
+        Button.TextLabel = Button.Base
+        SetupButtonActions(Button)
         InitEvents(Button)
 
         function Button:AddButton(...)
@@ -3856,6 +3913,7 @@ do
                 Risky = Info.Risky,
                 Disabled = Info.Disabled,
                 Visible = Info.Visible,
+                Addons = {},
 
                 Tween = nil,
                 Type = "SubButton",
@@ -3863,6 +3921,8 @@ do
 
             Button.SubButton = SubButton
             SubButton.Base, SubButton.Stroke = CreateButton(SubButton)
+            SubButton.TextLabel = SubButton.Base
+            SetupButtonActions(SubButton)
             InitEvents(SubButton)
 
             function SubButton:UpdateColors()
