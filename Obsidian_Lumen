@@ -2660,7 +2660,11 @@ do
             Parent = ToggleLabel,
         })
 
-        local KeybindsToggle = { Normal = KeyPicker.Mode ~= "Toggle" }
+        local KeybindsToggle = {
+            Normal = KeyPicker.Mode ~= "Toggle",
+            Press = false,
+            FlashTween = nil,
+        }
         do
             local Holder = New("TextButton", {
                 BackgroundTransparency = 1,
@@ -2709,6 +2713,19 @@ do
             })
 
             function KeybindsToggle:Display(State)
+                if KeybindsToggle.Press then
+                    Label.TextTransparency = 0
+
+                    if
+                        not KeybindsToggle.FlashTween
+                        or KeybindsToggle.FlashTween.PlaybackState ~= Enum.PlaybackState.Playing
+                    then
+                        CheckImage.ImageTransparency = 1
+                    end
+
+                    return
+                end
+
                 Label.TextTransparency = State and 0 or 0.5
                 CheckImage.ImageTransparency = State and 0 or 1
             end
@@ -2729,9 +2746,43 @@ do
                 Checkbox.Visible = not Normal
             end
 
+            function KeybindsToggle:SetPress(Press)
+                local NewPress = Press == true
+                if KeybindsToggle.Press == NewPress then
+                    return
+                end
+
+                KeybindsToggle.Press = NewPress
+
+                if not KeybindsToggle.Press then
+                    StopTween(KeybindsToggle.FlashTween)
+                    KeybindsToggle.FlashTween = nil
+                end
+            end
+
+            function KeybindsToggle:Flash()
+                if not KeybindsToggle.Press then
+                    return
+                end
+
+                StopTween(KeybindsToggle.FlashTween)
+                CheckImage.ImageTransparency = 0
+                KeybindsToggle.FlashTween = TweenService:Create(
+                    CheckImage,
+                    TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                    { ImageTransparency = 1 }
+                )
+                KeybindsToggle.FlashTween:Play()
+            end
+
             KeyPicker.DoClick = function(...) end --// make luau lsp shut up
             Holder.MouseButton1Click:Connect(function()
                 if KeybindsToggle.Normal then
+                    return
+                end
+
+                if KeybindsToggle.Press then
+                    KeyPicker:DoClick()
                     return
                 end
 
@@ -2824,7 +2875,10 @@ do
             end
 
             local State = KeyPicker:GetState()
+            local IsPressButton = KeyPicker.Mode == "Press"
+                and (ParentObj.Type == "Button" or ParentObj.Type == "SubButton")
             local ShowToggle = Library.ShowToggleFrameInKeybinds and KeyPicker.Mode == "Toggle"
+            local ShowPress = Library.ShowToggleFrameInKeybinds and IsPressButton
 
             if KeyPicker.SyncToggleState and ParentObj.Value ~= State then
                 ParentObj:SetValue(State)
@@ -2832,8 +2886,13 @@ do
 
             if KeybindsToggle.Loaded then
                 if ShowToggle then
+                    KeybindsToggle:SetPress(false)
                     KeybindsToggle:SetNormal(false)
+                elseif ShowPress then
+                    KeybindsToggle:SetNormal(false)
+                    KeybindsToggle:SetPress(true)
                 else
+                    KeybindsToggle:SetPress(false)
                     KeybindsToggle:SetNormal(true)
                 end
 
@@ -2886,6 +2945,10 @@ do
 
             Library:SafeCallback(KeyPicker.Callback, KeyPicker.Toggled)
             Library:SafeCallback(KeyPicker.Clicked, KeyPicker.Toggled)
+
+            if KeybindsToggle.Press then
+                KeybindsToggle:Flash()
+            end
 
             if KeyPicker.Mode == "Press" then
                 KeyPicker.Toggled = false
