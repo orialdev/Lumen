@@ -164,7 +164,6 @@ local Library = {
     KeybindFrame = nil,
     KeybindContainer = nil,
     KeybindToggles = {},
-    ActiveKeybindPicker = nil,
 
     Notifications = {},
 
@@ -591,6 +590,17 @@ function Library:UpdateDependencyBoxes()
     end
 end
 
+local function MatchesSearch(Text, Search)
+    if Search == "" then
+        return true
+    end
+    if typeof(Text) ~= "string" then
+        return false
+    end
+
+    return Text:lower():find(Search, 1, true) ~= nil
+end
+
 local function CheckDepbox(Box, Search)
     local VisibleElements = 0
 
@@ -603,12 +613,12 @@ local function CheckDepbox(Box, Search)
             local Visible = false
 
             --// Check if Search matches Element's Name and if Element is Visible
-            if ElementInfo.Text:lower():match(Search) and ElementInfo.Visible then
+            if MatchesSearch(ElementInfo.Text, Search) and ElementInfo.Visible then
                 Visible = true
             else
                 ElementInfo.Base.Visible = false
             end
-            if ElementInfo.SubButton.Text:lower():match(Search) and ElementInfo.SubButton.Visible then
+            if MatchesSearch(ElementInfo.SubButton.Text, Search) and ElementInfo.SubButton.Visible then
                 Visible = true
             else
                 ElementInfo.SubButton.Base.Visible = false
@@ -622,7 +632,7 @@ local function CheckDepbox(Box, Search)
         end
 
         --// Check if Search matches Element's Name and if Element is Visible
-        if ElementInfo.Text and ElementInfo.Text:lower():match(Search) and ElementInfo.Visible then
+        if MatchesSearch(ElementInfo.Text, Search) and ElementInfo.Visible then
             ElementInfo.Holder.Visible = true
             VisibleElements += 1
         else
@@ -683,12 +693,12 @@ local function ApplySearchToTab(Tab, Search)
                 local Visible = false
 
                 --// Check if Search matches Element's Name and if Element is Visible
-                if ElementInfo.Text:lower():match(Search) and ElementInfo.Visible then
+                if MatchesSearch(ElementInfo.Text, Search) and ElementInfo.Visible then
                     Visible = true
                 else
                     ElementInfo.Base.Visible = false
                 end
-                if ElementInfo.SubButton.Text:lower():match(Search) and ElementInfo.SubButton.Visible then
+                if MatchesSearch(ElementInfo.SubButton.Text, Search) and ElementInfo.SubButton.Visible then
                     Visible = true
                 else
                     ElementInfo.SubButton.Base.Visible = false
@@ -702,7 +712,7 @@ local function ApplySearchToTab(Tab, Search)
             end
 
             --// Check if Search matches Element's Name and if Element is Visible
-            if ElementInfo.Text and ElementInfo.Text:lower():match(Search) and ElementInfo.Visible then
+            if MatchesSearch(ElementInfo.Text, Search) and ElementInfo.Visible then
                 ElementInfo.Holder.Visible = true
                 VisibleElements += 1
             else
@@ -742,12 +752,12 @@ local function ApplySearchToTab(Tab, Search)
                     local Visible = false
 
                     --// Check if Search matches Element's Name and if Element is Visible
-                    if ElementInfo.Text:lower():match(Search) and ElementInfo.Visible then
+                    if MatchesSearch(ElementInfo.Text, Search) and ElementInfo.Visible then
                         Visible = true
                     else
                         ElementInfo.Base.Visible = false
                     end
-                    if ElementInfo.SubButton.Text:lower():match(Search) and ElementInfo.SubButton.Visible then
+                    if MatchesSearch(ElementInfo.SubButton.Text, Search) and ElementInfo.SubButton.Visible then
                         Visible = true
                     else
                         ElementInfo.SubButton.Base.Visible = false
@@ -761,7 +771,7 @@ local function ApplySearchToTab(Tab, Search)
                 end
 
                 --// Check if Search matches Element's Name and if Element is Visible
-                if ElementInfo.Text and ElementInfo.Text:lower():match(Search) and ElementInfo.Visible then
+                if MatchesSearch(ElementInfo.Text, Search) and ElementInfo.Visible then
                     ElementInfo.Holder.Visible = true
                     VisibleElements[SubTab] += 1
                 else
@@ -855,6 +865,9 @@ local function ResetTab(Tab)
 end
 
 function Library:UpdateSearch(SearchText)
+    if typeof(SearchText) ~= "string" then
+        SearchText = ""
+    end
     Library.SearchText = SearchText
 
     local TabsToReset = {}
@@ -873,7 +886,7 @@ function Library:UpdateSearch(SearchText)
         ResetTab(Tab)
     end
 
-    local Search = SearchText:lower()
+    local Search = Trim(SearchText):lower()
     if Trim(Search) == "" then
         Library.Searching = false
         Library.LastSearchTab = nil
@@ -1303,6 +1316,10 @@ function Library:GetTextBounds(Text: string, Font: Font, Size: number, Width: nu
 end
 
 function Library:MouseIsOverFrame(Frame: GuiObject, Mouse: Vector2): boolean
+    if not Frame or not Frame.Parent or not Mouse or Mouse.X == nil or Mouse.Y == nil then
+        return false
+    end
+
     local AbsPos, AbsSize = Frame.AbsolutePosition, Frame.AbsoluteSize
     return Mouse.X >= AbsPos.X
         and Mouse.X <= AbsPos.X + AbsSize.X
@@ -1959,7 +1976,7 @@ function Library:AddTooltip(InfoStr: string, DisabledInfoStr: string, HoverInsta
         end
     end
 
-    table.insert(Tooltips, TooltipLabel)
+    table.insert(Tooltips, TooltipTable)
     return TooltipTable
 end
 
@@ -1984,7 +2001,6 @@ function Library:Unload()
     end
 
     Library.Unloaded = true
-    Library.ActiveKeybindPicker = nil
     ScreenGui:Destroy()
 
     getgenv().Library = nil
@@ -2055,9 +2071,6 @@ do
         end
 
         local ToggleLabel = ParentObj.TextLabel
-        if IsButton and ParentObj.KeybindSlot then
-            ToggleLabel = ParentObj.KeybindSlot
-        end
         assert(ToggleLabel, "KeyPicker requires a TextLabel to attach to.")
 
         local KeyPicker = {
@@ -2067,7 +2080,6 @@ do
             DisplayValue = Info.Default, -- Picker Text
 
             Toggled = false,
-            LastState = nil,
             Mode = Info.Mode,
             SyncToggleState = Info.SyncToggleState,
 
@@ -2097,13 +2109,6 @@ do
                 Info.Mode = "Toggle"
             end
         end
-        if typeof(Info.Modes) ~= "table" or #Info.Modes == 0 then
-            Info.Modes = { "Toggle" }
-        end
-        if not table.find(Info.Modes, Info.Mode) then
-            Info.Mode = Info.Modes[1]
-        end
-        KeyPicker.Mode = Info.Mode
 
         local Picking = false
 
@@ -2223,68 +2228,17 @@ do
             local ValidModifiers = {}
 
             for _, name in ipairs(CurrentModifiers) do
-                local Normalized = name
-                if typeof(Normalized) == "EnumItem" then
-                    Normalized = ModifiersInput[Normalized]
-                end
-
-                if not Modifiers[Normalized] or table.find(ValidModifiers, Normalized) then
+                if not Modifiers[name] then
                     continue
                 end
 
-                table.insert(ValidModifiers, Normalized)
+                table.insert(ValidModifiers, name)
             end
 
             return ValidModifiers
         end
 
-        local function NormalizeKeyValue(Value)
-            if typeof(Value) == "EnumItem" then
-                if Value.EnumType == Enum.KeyCode then
-                    return Value.Name
-                elseif Value.EnumType == Enum.UserInputType then
-                    return SpecialKeysInput[Value] or "Unknown"
-                end
-            end
-
-            if typeof(Value) == "string" then
-                if Value == "MouseButton1" then
-                    return "MB1"
-                elseif Value == "MouseButton2" then
-                    return "MB2"
-                elseif Value == "MouseButton3" then
-                    return "MB3"
-                end
-
-                return Value ~= "" and Value or "None"
-            end
-
-            return "None"
-        end
-
-        local function GetKeyCodeFromValue(Value)
-            return Modifiers[Value] or Enum.KeyCode[Value]
-        end
-
-        local function GetInputKeyName(Input)
-            if SpecialKeysInput[Input.UserInputType] ~= nil then
-                return SpecialKeysInput[Input.UserInputType]
-            end
-            if Input.UserInputType == Enum.UserInputType.Keyboard then
-                return Input.KeyCode.Name
-            end
-            return nil
-        end
-
         KeyPicker.Modifiers = VerifyModifiers(KeyPicker.Modifiers) -- Verify default modifiers
-        KeyPicker.Value = NormalizeKeyValue(KeyPicker.Value)
-        if KeyPicker.Value == "None" or KeyPicker.Value == "Unknown" then
-            KeyPicker.DisplayValue = KeyPicker.Value
-        elseif GetTableSize(KeyPicker.Modifiers) > 0 then
-            KeyPicker.DisplayValue = (table.concat(KeyPicker.Modifiers, " + ") .. " + " .. KeyPicker.Value)
-        else
-            KeyPicker.DisplayValue = KeyPicker.Value
-        end
 
         local Picker = New("TextButton", {
             BackgroundColor3 = "MainColor",
@@ -2296,15 +2250,23 @@ do
             Parent = ToggleLabel,
         })
 
-        if IsButton then
-            Picker.BackgroundTransparency = 1
-            Picker.BorderSizePixel = 0
-            Picker.Size = UDim2.fromScale(1, 1)
-            Picker.TextXAlignment = Enum.TextXAlignment.Center
-            Picker.TextYAlignment = Enum.TextYAlignment.Center
-            if ToggleLabel.ZIndex then
-                Picker.ZIndex = ToggleLabel.ZIndex + 1
+        local KeybindPadding
+        if IsButton and ToggleLabel:IsA("TextButton") then
+            Picker.AnchorPoint = Vector2.new(1, 0.5)
+            Picker.Position = UDim2.new(1, -6, 0.5, 0)
+
+            ToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+            ToggleLabel.TextTruncate = Enum.TextTruncate.AtEnd
+
+            if not ParentObj.KeybindPadding then
+                ParentObj.KeybindPadding = New("UIPadding", {
+                    Name = "KeybindPadding",
+                    PaddingLeft = UDim.new(0, 8),
+                    PaddingRight = UDim.new(0, 26),
+                    Parent = ToggleLabel,
+                })
             end
+            KeybindPadding = ParentObj.KeybindPadding
         end
 
         local KeybindsToggle = { Normal = KeyPicker.Mode ~= "Toggle" }
@@ -2423,7 +2385,6 @@ do
                 Button.TextTransparency = 0
 
                 MenuTable:Close()
-                KeyPicker:Update(true)
             end
 
             function ModeButton:Deselect()
@@ -2449,66 +2410,47 @@ do
                 return
             end
 
-            local BoundsWidth = ToggleLabel.AbsoluteSize.X
-            if IsButton then
-                BoundsWidth = workspace.CurrentCamera.ViewportSize.X
-            end
             local X, Y = Library:GetTextBounds(
                 PickerText or KeyPicker.DisplayValue,
                 Picker.FontFace,
                 Picker.TextSize,
-                BoundsWidth
+                ToggleLabel.AbsoluteSize.X
             )
             Picker.Text = PickerText or KeyPicker.DisplayValue
-            if IsButton then
-                if ParentObj.SetKeybindWidth then
-                    ParentObj:SetKeybindWidth(X, Y)
-                end
-            else
-                Picker.Size = UDim2.fromOffset((X + 9), (Y + 4))
+            Picker.Size = UDim2.fromOffset((X + 9), (Y + 4))
+
+            if IsButton and KeybindPadding then
+                KeybindPadding.PaddingRight = UDim.new(0, Picker.Size.X.Offset + 10)
             end
         end
 
-        function KeyPicker:Update(SkipCallbacks)
+        function KeyPicker:Update()
             KeyPicker:Display()
-            local HasUI = not Info.NoUI
+
+            if Info.NoUI then
+                return
+            end
 
             if KeyPicker.Mode == "Toggle" and ParentObj.Type == "Toggle" and ParentObj.Disabled then
-                if HasUI then
-                    KeybindsToggle:SetVisibility(false)
-                end
+                KeybindsToggle:SetVisibility(false)
                 return
             end
 
             local State = KeyPicker:GetState()
-            local PrevState = KeyPicker.LastState
-            if KeyPicker.Mode == "Hold" or KeyPicker.Mode == "Always" then
-                KeyPicker.Toggled = State
-                if
-                    not SkipCallbacks
-                    and PrevState ~= nil
-                    and PrevState ~= State
-                    and (not KeyPicker.SyncToggleState or ParentObj.Type ~= "Toggle")
-                then
-                    Library:SafeCallback(KeyPicker.Callback, State)
-                    Library:SafeCallback(KeyPicker.Clicked, State)
-                end
-            end
-            KeyPicker.LastState = State
+            local ShowToggle = Library.ShowToggleFrameInKeybinds and KeyPicker.Mode == "Toggle"
 
             if KeyPicker.SyncToggleState and ParentObj.Value ~= State then
                 ParentObj:SetValue(State)
             end
 
-            if HasUI and KeybindsToggle.Loaded then
-                local ShowToggle = Library.ShowToggleFrameInKeybinds and KeyPicker.Mode == "Toggle"
-                KeybindsToggle:SetNormal(not ShowToggle)
+            if KeybindsToggle.Loaded then
+                if ShowToggle then
+                    KeybindsToggle:SetNormal(false)
+                else
+                    KeybindsToggle:SetNormal(true)
+                end
 
-                KeybindsToggle:SetText(("[%s] %s (%s)"):format(
-                    KeyPicker.DisplayValue,
-                    KeyPicker.Text,
-                    KeyPicker.Mode or "Toggle"
-                ))
+                KeybindsToggle:SetText(("[%s] %s (%s)"):format(KeyPicker.DisplayValue, KeyPicker.Text, KeyPicker.Mode))
                 KeybindsToggle:SetVisibility(true)
                 KeybindsToggle:Display(State)
             end
@@ -2519,7 +2461,7 @@ do
                 return true
             elseif KeyPicker.Mode == "Hold" then
                 local Key = KeyPicker.Value
-                if Key == "None" or Key == "Unknown" then
+                if Key == "None" then
                     return false
                 end
 
@@ -2531,41 +2473,11 @@ do
                     return UserInputService:IsMouseButtonPressed(SpecialKeys[Key])
                         and not UserInputService:GetFocusedTextBox()
                 else
-                    local KeyCode = GetKeyCodeFromValue(Key)
-                    if not KeyCode then
-                        return false
-                    end
-                    return UserInputService:IsKeyDown(KeyCode) and not UserInputService:GetFocusedTextBox()
+                    return UserInputService:IsKeyDown(Enum.KeyCode[Key]) and not UserInputService:GetFocusedTextBox()
                 end
             else
                 return KeyPicker.Toggled
             end
-        end
-
-        function KeyPicker:MatchesInput(Input)
-            if not Input then
-                return false
-            end
-
-            if KeyPicker.Value == "Unknown" or KeyPicker.Value == "None" then
-                return false
-            end
-
-            if not AreModifiersHeld(KeyPicker.Modifiers) then
-                return false
-            end
-
-            local InputKey = GetInputKeyName(Input)
-            if not InputKey then
-                return false
-            end
-
-            if InputKey == KeyPicker.Value then
-                return true
-            end
-
-            local KeyCode = GetKeyCodeFromValue(KeyPicker.Value)
-            return Input.UserInputType == Enum.UserInputType.Keyboard and KeyCode and Input.KeyCode == KeyCode
         end
 
         function KeyPicker:OnChanged(Func)
@@ -2596,7 +2508,6 @@ do
         function KeyPicker:SetValue(Data)
             local Key, Mode, Modifiers = Data[1], Data[2], Data[3]
 
-            Key = NormalizeKeyValue(Key)
             local IsKeyValid, UserInputType = pcall(function()
                 if Key == "None" then
                     Key = nil
@@ -2604,7 +2515,7 @@ do
                 end
 
                 if SpecialKeys[Key] == nil then
-                    return GetKeyCodeFromValue(Key)
+                    return Enum.KeyCode[Key]
                 end
 
                 return SpecialKeys[Key]
@@ -2612,7 +2523,7 @@ do
 
             if Key == nil then
                 KeyPicker.Value = "None"
-            elseif IsKeyValid and UserInputType ~= nil then
+            elseif IsKeyValid then
                 KeyPicker.Value = Key
             else
                 KeyPicker.Value = "Unknown"
@@ -2620,13 +2531,9 @@ do
 
             KeyPicker.Modifiers =
                 VerifyModifiers(if typeof(Modifiers) == "table" then Modifiers else KeyPicker.Modifiers)
-            if KeyPicker.Value == "None" or KeyPicker.Value == "Unknown" then
-                KeyPicker.DisplayValue = KeyPicker.Value
-            elseif GetTableSize(KeyPicker.Modifiers) > 0 then
-                KeyPicker.DisplayValue = (table.concat(KeyPicker.Modifiers, " + ") .. " + " .. KeyPicker.Value)
-            else
-                KeyPicker.DisplayValue = KeyPicker.Value
-            end
+            KeyPicker.DisplayValue = if GetTableSize(KeyPicker.Modifiers) > 0
+                then (table.concat(KeyPicker.Modifiers, " + ") .. " + " .. KeyPicker.Value)
+                else KeyPicker.Value
 
             if ModeButtons[Mode] then
                 ModeButtons[Mode]:Select()
@@ -2636,28 +2543,20 @@ do
             Library:SafeCallback(KeyPicker.ChangedCallback, UserInputType, NewModifiers)
             Library:SafeCallback(KeyPicker.Changed, UserInputType, NewModifiers)
 
-            KeyPicker:Update(true)
+            KeyPicker:Update()
         end
 
         function KeyPicker:SetText(Text)
             KeybindsToggle:SetText(Text)
-            KeyPicker:Update(true)
+            KeyPicker:Update()
         end
 
         Picker.MouseButton1Click:Connect(function()
-            if Picking or Library.ActiveKeybindPicker then
+            if Picking then
                 return
             end
 
             Picking = true
-            Library.ActiveKeybindPicker = KeyPicker
-
-            local function EndPicking()
-                Picking = false
-                if Library.ActiveKeybindPicker == KeyPicker then
-                    Library.ActiveKeybindPicker = nil
-                end
-            end
 
             Picker.Text = "..."
             Picker.Size = UDim2.fromOffset(29, 18)
@@ -2679,8 +2578,8 @@ do
                 Picker.Size = UDim2.fromOffset(29, 18)
 
                 if GetInput() then
-                    EndPicking()
-                    KeyPicker:Update(true)
+                    Picking = false
+                    KeyPicker:Update()
                     return
                 end
 
@@ -2729,8 +2628,8 @@ do
                     until false
 
                     if StopLoop then
-                        EndPicking()
-                        KeyPicker:Update(true)
+                        Picking = false
+                        KeyPicker:Update()
                         return
                     end
                 end
@@ -2754,7 +2653,7 @@ do
             repeat
                 task.wait()
             until not IsInputDown(Input) or UserInputService:GetFocusedTextBox()
-            EndPicking()
+            Picking = false
         end)
         Picker.MouseButton2Click:Connect(MenuTable.Toggle)
 
@@ -2768,13 +2667,25 @@ do
                 or KeyPicker.Value == "Unknown"
                 or KeyPicker.Value == "None"
                 or Picking
-                or Library.ActiveKeybindPicker
                 or UserInputService:GetFocusedTextBox()
             then
                 return
             end
 
-            local HoldingKey = KeyPicker:MatchesInput(Input)
+            local Key = KeyPicker.Value
+            local HoldingModifiers = AreModifiersHeld(KeyPicker.Modifiers)
+            local HoldingKey = false
+
+            if
+                Key
+                and HoldingModifiers == true
+                and (
+                    SpecialKeysInput[Input.UserInputType] == Key
+                    or (Input.UserInputType == Enum.UserInputType.Keyboard and Input.KeyCode.Name == Key)
+                )
+            then
+                HoldingKey = true
+            end
 
             if KeyPicker.Mode == "Toggle" then
                 if HoldingKey then
@@ -2799,7 +2710,6 @@ do
                 KeyPicker.Value == "Unknown"
                 or KeyPicker.Value == "None"
                 or Picking
-                or Library.ActiveKeybindPicker
                 or UserInputService:GetFocusedTextBox()
             then
                 return
@@ -3487,12 +3397,6 @@ do
         })
 
         local function CreateButton(Button)
-            local Wrap = New("Frame", {
-                BackgroundTransparency = 1,
-                Size = UDim2.fromScale(1, 1),
-                Parent = Holder,
-            })
-
             local Base = New("TextButton", {
                 Active = not Button.Disabled,
                 BackgroundColor3 = Button.Disabled and "BackgroundColor" or "MainColor",
@@ -3501,7 +3405,7 @@ do
                 TextSize = 14,
                 TextTransparency = 0.4,
                 Visible = Button.Visible,
-                Parent = Wrap,
+                Parent = Holder,
             })
 
             local Stroke = New("UIStroke", {
@@ -3510,32 +3414,7 @@ do
                 Parent = Base,
             })
 
-            local KeybindSlot = New("Frame", {
-                AnchorPoint = Vector2.new(1, 0.5),
-                BackgroundColor3 = "BackgroundColor",
-                Position = UDim2.new(1, 0, 0.5, 0),
-                Size = UDim2.fromOffset(0, 18),
-                Visible = false,
-                Parent = Wrap,
-            })
-            New("UICorner", {
-                CornerRadius = UDim.new(0, Library.CornerRadius / 2),
-                Parent = KeybindSlot,
-            })
-            New("UIStroke", {
-                Color = "OutlineColor",
-                Transparency = 0.5,
-                Parent = KeybindSlot,
-            })
-            New("UIPadding", {
-                PaddingBottom = UDim.new(0, 2),
-                PaddingLeft = UDim.new(0, 6),
-                PaddingRight = UDim.new(0, 6),
-                PaddingTop = UDim.new(0, 2),
-                Parent = KeybindSlot,
-            })
-
-            return Base, Stroke, Wrap, KeybindSlot
+            return Base, Stroke
         end
 
         local function TriggerButton(Button, ConfirmEvent)
@@ -3595,26 +3474,8 @@ do
             end)
         end
 
-        Button.Base, Button.Stroke, Button.Wrap, Button.KeybindSlot = CreateButton(Button)
+        Button.Base, Button.Stroke = CreateButton(Button)
         Button.TextLabel = Button.Base
-        Button.KeybindGap = 6
-        function Button:SetKeybindWidth(Width, Height)
-            if not self.KeybindSlot then
-                return
-            end
-
-            if not Width or Width <= 0 then
-                self.KeybindSlot.Visible = false
-                self.Base.Size = UDim2.fromScale(1, 1)
-                return
-            end
-
-            local SlotWidth = math.max(Width + 12, 18)
-            local SlotHeight = math.max((Height or 14) + 4, 18)
-            self.KeybindSlot.Visible = true
-            self.KeybindSlot.Size = UDim2.fromOffset(SlotWidth, SlotHeight)
-            self.Base.Size = UDim2.new(1, -(SlotWidth + self.KeybindGap), 1, 0)
-        end
         function Button:Trigger(ConfirmEvent)
             TriggerButton(self, ConfirmEvent)
         end
@@ -3648,26 +3509,8 @@ do
             }
 
             Button.SubButton = SubButton
-            SubButton.Base, SubButton.Stroke, SubButton.Wrap, SubButton.KeybindSlot = CreateButton(SubButton)
+            SubButton.Base, SubButton.Stroke = CreateButton(SubButton)
             SubButton.TextLabel = SubButton.Base
-            SubButton.KeybindGap = 6
-            function SubButton:SetKeybindWidth(Width, Height)
-                if not self.KeybindSlot then
-                    return
-                end
-
-                if not Width or Width <= 0 then
-                    self.KeybindSlot.Visible = false
-                    self.Base.Size = UDim2.fromScale(1, 1)
-                    return
-                end
-
-                local SlotWidth = math.max(Width + 12, 18)
-                local SlotHeight = math.max((Height or 14) + 4, 18)
-                self.KeybindSlot.Visible = true
-                self.KeybindSlot.Size = UDim2.fromOffset(SlotWidth, SlotHeight)
-                self.Base.Size = UDim2.new(1, -(SlotWidth + self.KeybindGap), 1, 0)
-            end
             function SubButton:Trigger(ConfirmEvent)
                 TriggerButton(self, ConfirmEvent)
             end
@@ -7847,53 +7690,22 @@ function Library:CreateWindow(WindowInfo)
         Library:UpdateSearch(SearchBox.Text)
     end)
 
-    local ToggleSpecialKeysInput = {
-        [Enum.UserInputType.MouseButton1] = "MB1",
-        [Enum.UserInputType.MouseButton2] = "MB2",
-        [Enum.UserInputType.MouseButton3] = "MB3",
-    }
-    local function MatchesToggleKeybind(Input: InputObject)
-        local Keybind = Library.ToggleKeybind
-
-        if typeof(Keybind) == "table" and Keybind.Type == "KeyPicker" and typeof(Keybind.MatchesInput) == "function" then
-            return Keybind:MatchesInput(Input)
-        end
-
-        if typeof(Keybind) == "EnumItem" then
-            if Keybind.EnumType == Enum.UserInputType then
-                return Input.UserInputType == Keybind
-            elseif Keybind.EnumType == Enum.KeyCode then
-                return Input.UserInputType == Enum.UserInputType.Keyboard and Input.KeyCode == Keybind
-            end
-        elseif typeof(Keybind) == "string" then
-            if Keybind == "MouseButton1" then
-                Keybind = "MB1"
-            elseif Keybind == "MouseButton2" then
-                Keybind = "MB2"
-            elseif Keybind == "MouseButton3" then
-                Keybind = "MB3"
-            end
-
-            if Input.UserInputType == Enum.UserInputType.Keyboard then
-                return Input.KeyCode.Name == Keybind
-            end
-
-            return ToggleSpecialKeysInput[Input.UserInputType] == Keybind
-        end
-
-        return false
-    end
-
     Library:GiveSignal(UserInputService.InputBegan:Connect(function(Input: InputObject)
         if Library.Unloaded then
             return
         end
 
-        if UserInputService:GetFocusedTextBox() or Library.ActiveKeybindPicker then
+        if UserInputService:GetFocusedTextBox() then
             return
         end
 
-        if MatchesToggleKeybind(Input) then
+        if
+            (
+                typeof(Library.ToggleKeybind) == "table"
+                and Library.ToggleKeybind.Type == "KeyPicker"
+                and Input.KeyCode.Name == Library.ToggleKeybind.Value
+            ) or Input.KeyCode == Library.ToggleKeybind
+        then
             Library.Toggle()
         end
     end))
