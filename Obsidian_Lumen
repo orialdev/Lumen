@@ -1455,12 +1455,19 @@ local FetchIcons, Icons = pcall(function()
 end)
 
 function Library:GetIcon(IconName: string)
-    if not FetchIcons then
+    if not FetchIcons or typeof(Icons) ~= "table" or typeof(Icons.GetAsset) ~= "function" then
         return
     end
 
-    local Success, Icon = pcall(Icons.GetAsset, IconName)
-    if not Success then
+    local Success, Icon = pcall(Icons.GetAsset, Icons, IconName)
+    if not Success or Icon == nil then
+        Success, Icon = pcall(Icons.GetAsset, IconName)
+        if not Success then
+            return
+        end
+    end
+
+    if Icon == nil then
         return
     end
     return Icon
@@ -4418,7 +4425,7 @@ do
 
         local Input = {
             Text = Info.Text,
-            Value = Info.Default,
+            Value = Info.Default ~= nil and tostring(Info.Default) or "",
 
             Finished = Info.Finished,
             Numeric = Info.Numeric,
@@ -4494,6 +4501,7 @@ do
         end
 
         function Input:SetValue(Text)
+            Text = tostring(Text or "")
             if not Input.AllowEmpty and Trim(Text) == "" then
                 Text = Input.EmptyReset
             end
@@ -5221,11 +5229,29 @@ do
             Info.AllowNull = true
         end
 
+        local Values
+        if typeof(Info.Values) == "table" then
+            Values = Info.Values
+        elseif Info.Values ~= nil then
+            Values = { Info.Values }
+        else
+            Values = {}
+        end
+
+        local DisabledValues
+        if typeof(Info.DisabledValues) == "table" then
+            DisabledValues = Info.DisabledValues
+        elseif Info.DisabledValues ~= nil then
+            DisabledValues = { Info.DisabledValues }
+        else
+            DisabledValues = {}
+        end
+
         local Dropdown = {
             Text = typeof(Info.Text) == "string" and Info.Text or nil,
             Value = Info.Multi and {} or nil,
-            Values = Info.Values,
-            DisabledValues = Info.DisabledValues,
+            Values = Values,
+            DisabledValues = DisabledValues,
             Multi = Info.Multi,
 
             SpecialType = Info.SpecialType,
