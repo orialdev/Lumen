@@ -467,6 +467,29 @@ local function GetSchemeValue(Index)
 end
 
 --// Basic Functions \\--
+local function GetCurrentCamera()
+    local Camera = workspace.CurrentCamera
+    if Camera then
+        return Camera
+    end
+
+    Camera = workspace:FindFirstChildWhichIsA("Camera")
+    if Camera then
+        workspace.CurrentCamera = Camera
+    end
+
+    return Camera
+end
+
+local function GetViewportSize()
+    local Camera = GetCurrentCamera()
+    if Camera then
+        return Camera.ViewportSize
+    end
+
+    return Vector2.new(1920, 1080)
+end
+
 local function WaitForEvent(Event, Timeout, Condition)
     local Bindable = Instance.new("BindableEvent")
     local Completed = false
@@ -1036,9 +1059,22 @@ function Library:GetCustomIcon(IconName: string)
     end
 end
 
+local function DeepCopy(Value)
+    if typeof(Value) ~= "table" then
+        return Value
+    end
+
+    local Copy = {}
+    for Key, Entry in Value do
+        Copy[Key] = DeepCopy(Entry)
+    end
+
+    return Copy
+end
+
 function Library:Validate(Table: { [string]: any }, Template: { [string]: any }): { [string]: any }
     if typeof(Table) ~= "table" then
-        return Template
+        return DeepCopy(Template)
     end
 
     for k, v in Template do
@@ -1282,7 +1318,9 @@ function Library:GetTextBounds(Text: string, Font: Font, Size: number, Width: nu
     Params.RichText = true
     Params.Font = Font
     Params.Size = Size
-    Params.Width = Width or workspace.CurrentCamera.ViewportSize.X - 32
+    local ViewportSize = GetViewportSize()
+    local MaxWidth = Width or (ViewportSize.X - 32)
+    Params.Width = math.max(1, MaxWidth)
 
     local Bounds = TextService:GetTextBoundsAsync(Params)
     return Bounds.X, Bounds.Y
@@ -1472,9 +1510,8 @@ function Library:AddBlank(Frame: GuiObject, Size: UDim2)
     })
 end
 
---// Deprecated \\--
+--// Compatibility \\--
 function Library:MakeOutline(Frame: GuiObject, Corner: number?, ZIndex: number?)
-    warn("Obsidian:MakeOutline is deprecated, please use Obsidian:AddOutline instead.")
     local Holder = New("Frame", {
         BackgroundColor3 = "DarkColor",
         Position = UDim2.fromOffset(-2, -2),
@@ -1656,18 +1693,16 @@ function Library:AddDraggableMenu(Name: string)
     return Holder, Container
 end
 
---// Watermark - Deprecated \\--
+--// Watermark - Compatibility \\--
 do
     local WatermarkLabel = Library:AddDraggableLabel("")
     WatermarkLabel:SetVisible(false)
 
     function Library:SetWatermark(Text: string)
-        warn("Watermark is deprecated, please use Library:AddDraggableLabel instead.")
         WatermarkLabel:SetText(Text)
     end
 
     function Library:SetWatermarkVisibility(Visible: boolean)
-        warn("Watermark is deprecated, please use Library:AddDraggableLabel instead.")
         WatermarkLabel:SetVisible(Visible)
     end
 end
@@ -1859,14 +1894,15 @@ TooltipLabel:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
         return
     end
 
+    local ViewportSize = GetViewportSize()
     local X, _ = Library:GetTextBounds(
         TooltipLabel.Text,
         TooltipLabel.FontFace,
         TooltipLabel.TextSize,
-        (workspace.CurrentCamera.ViewportSize.X - TooltipLabel.AbsolutePosition.X - 8) / Library.DPIScale
+        (ViewportSize.X - TooltipLabel.AbsolutePosition.X - 8) / Library.DPIScale
     )
 
-    TooltipLabel.Size = UDim2.fromOffset(X + 8)
+    TooltipLabel.Size = UDim2.fromOffset(X + 8, TooltipLabel.AbsoluteSize.Y)
 end)
 
 local CurrentHoverInstance
@@ -3205,6 +3241,9 @@ do
 
             ColorPicker.SetValueRGB = function(...) end --// make luau lsp shut up
             CreateButton("Paste color", function()
+                if not Library.CopiedColor then
+                    return
+                end
                 ColorPicker:SetValueRGB(Library.CopiedColor[1], Library.CopiedColor[2])
             end)
 
@@ -4423,6 +4462,7 @@ do
         end
 
         function Input:SetValue(Text)
+            Text = Text == nil and "" or tostring(Text)
             if not Input.AllowEmpty and Trim(Text) == "" then
                 Text = Input.EmptyReset
             end
@@ -6281,10 +6321,10 @@ end
 
 function Library:CreateWindow(WindowInfo)
     WindowInfo = Library:Validate(WindowInfo, Templates.Window)
-    local ViewportSize: Vector2 = workspace.CurrentCamera.ViewportSize
+    local ViewportSize: Vector2 = GetViewportSize()
     if RunService:IsStudio() and ViewportSize.X <= 5 and ViewportSize.Y <= 5 then
         repeat
-            ViewportSize = workspace.CurrentCamera.ViewportSize
+            ViewportSize = GetViewportSize()
             task.wait()
         until ViewportSize.X > 5 and ViewportSize.Y > 5
     end
