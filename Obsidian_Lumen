@@ -1479,9 +1479,29 @@ function Library:GetCustomIcon(IconName: string)
     end
 end
 
+local function DeepCopy(Value, Seen)
+    if typeof(Value) ~= "table" then
+        return Value
+    end
+
+    if Seen and Seen[Value] then
+        return Seen[Value]
+    end
+
+    local Copy = {}
+    Seen = Seen or {}
+    Seen[Value] = Copy
+
+    for k, v in pairs(Value) do
+        Copy[DeepCopy(k, Seen)] = DeepCopy(v, Seen)
+    end
+
+    return Copy
+end
+
 function Library:Validate(Table: { [string]: any }, Template: { [string]: any }): { [string]: any }
     if typeof(Table) ~= "table" then
-        return Template
+        return DeepCopy(Template)
     end
 
     for k, v in pairs(Template) do
@@ -3603,7 +3623,11 @@ do
             Data.Text = Params.Text or ""
             Data.DoesWrap = Params.DoesWrap or false
             Data.Size = Params.Size or 14
-            Data.Visible = Params.Visible or true
+            if Params.Visible == nil then
+                Data.Visible = true
+            else
+                Data.Visible = Params.Visible
+            end
             Data.Idx = typeof(Second) == "table" and First or nil
         else
             Data.Text = First or ""
@@ -3722,7 +3746,11 @@ do
 
                 Info.Risky = Params.Risky or false
                 Info.Disabled = Params.Disabled or false
-                Info.Visible = Params.Visible or true
+                if Params.Visible == nil then
+                    Info.Visible = true
+                else
+                    Info.Visible = Params.Visible
+                end
                 Info.Idx = typeof(Second) == "table" and First or nil
             else
                 Info.Text = First or ""
@@ -4165,7 +4193,7 @@ do
         end
 
         function Toggle:SetValue(Value)
-            if Toggle.Disabled then
+            if Toggle.Value == Value then
                 return
             end
 
@@ -4180,8 +4208,10 @@ do
             end
 
             Library:UpdateDependencyBoxes()
-            Library:SafeCallback(Toggle.Callback, Toggle.Value)
-            Library:SafeCallback(Toggle.Changed, Toggle.Value)
+            if not Toggle.Disabled then
+                Library:SafeCallback(Toggle.Callback, Toggle.Value)
+                Library:SafeCallback(Toggle.Changed, Toggle.Value)
+            end
         end
 
         function Toggle:SetDisabled(Disabled: boolean)
@@ -4387,7 +4417,7 @@ do
         end
 
         function Toggle:SetValue(Value)
-            if Toggle.Disabled then
+            if Toggle.Value == Value then
                 return
             end
 
@@ -4402,8 +4432,10 @@ do
             end
 
             Library:UpdateDependencyBoxes()
-            Library:SafeCallback(Toggle.Callback, Toggle.Value)
-            Library:SafeCallback(Toggle.Changed, Toggle.Value)
+            if not Toggle.Disabled then
+                Library:SafeCallback(Toggle.Callback, Toggle.Value)
+                Library:SafeCallback(Toggle.Changed, Toggle.Value)
+            end
         end
 
         function Toggle:SetDisabled(Disabled: boolean)
@@ -4762,8 +4794,9 @@ do
                 end
             end
 
-            local X = (Slider.Value - Slider.Min) / (Slider.Max - Slider.Min)
-            Fill.Size = UDim2.fromScale(X, 1)
+            local Range = Slider.Max - Slider.Min
+            local X = Range == 0 and 0 or (Slider.Value - Slider.Min) / Range
+            Fill.Size = UDim2.fromScale(math.clamp(X, 0, 1), 1)
         end
 
         function Slider:OnChanged(Func)
@@ -4787,10 +4820,6 @@ do
         end
 
         function Slider:SetValue(Str)
-            if Slider.Disabled then
-                return
-            end
-
             local Num = tonumber(Str)
             if not Num or Num == Slider.Value then
                 return
@@ -4801,8 +4830,10 @@ do
             Slider.Value = Num
             Slider:Display()
 
-            Library:SafeCallback(Slider.Callback, Slider.Value)
-            Library:SafeCallback(Slider.Changed, Slider.Value)
+            if not Slider.Disabled then
+                Library:SafeCallback(Slider.Callback, Slider.Value)
+                Library:SafeCallback(Slider.Changed, Slider.Value)
+            end
         end
 
         function Slider:SetDisabled(Disabled: boolean)
@@ -5189,10 +5220,6 @@ do
         end
 
         function Radio:SetValue(Value)
-            if Radio.Disabled then
-                return
-            end
-
             local NewValue
             if Value == nil then
                 NewValue = nil
@@ -5209,7 +5236,9 @@ do
             Radio.Value = NewValue
             Radio:Display()
 
-            Library:SafeCallback(Radio.Callback, Radio.Value)
+            if not Radio.Disabled then
+                Library:SafeCallback(Radio.Callback, Radio.Value)
+            end
         end
 
         function Radio:SetDisabled(Disabled: boolean)
