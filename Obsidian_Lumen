@@ -314,17 +314,6 @@ local Templates = {
 
         --// Dragging \\--
         CompactWidthActivation = 128,
-
-        --// User Info \\--
-        User = {
-            Enabled = true,
-            Anonymous = false,
-            AnonymousText = "Anonymous",
-            Name = "",
-            DisplayName = "",
-            Image = "",
-            Callback = nil,
-        },
     },
     Toggle = {
         Text = "Toggle",
@@ -6823,40 +6812,10 @@ function Library:CreateWindow(WindowInfo)
     local ResizeButton
     local Tabs
     local Container
-    local UserButton
-    local UserAvatarHolder
-    local UserAvatarImage
-    local UserNameLabel
-    local UserStatusDot
-    local UserArrow
 
     local InitialLeftWidth = math.ceil(WindowInfo.Size.X.Offset * 0.3)
     local IsCompact = WindowInfo.SidebarCompacted
     local LastExpandedWidth = InitialLeftWidth
-    local SidebarWidth = InitialLeftWidth
-
-    local BottomBarHeight = 20
-    local UserInfoHeight = 46
-    local UserInfoGap = 6
-    local UserAvatarSize = 28
-    local UserArrowSize = 18
-    local UserStatusDotSize = 8
-    local UserPaddingX = 10
-    local UserNameGap = 8
-    local UserStatusDotGap = 8
-
-    local UserInfoEnabled = WindowInfo.User.Enabled ~= false
-    local UserAnonymous = WindowInfo.User.Anonymous == true
-    local UserCallback = WindowInfo.User.Callback
-
-    local TabsBottomOffsetWithUser = BottomBarHeight + UserInfoHeight + UserInfoGap
-    local TabsBottomOffsetNoUser = BottomBarHeight
-    local TabsBottomOffset = UserInfoEnabled and TabsBottomOffsetWithUser or TabsBottomOffsetNoUser
-
-    local UserAvatarExpandedPos = UDim2.new(0, UserPaddingX, 0.5, 0)
-    local UserAvatarCompactPos = UDim2.new(0.5, -UserAvatarSize / 2, 0.5, 0)
-    local UserNameLeftOffset = UserPaddingX + UserAvatarSize + UserNameGap
-    local UserNameRightOffset = UserPaddingX + UserArrowSize + UserStatusDotGap + UserStatusDotSize
 
     do
         Library.KeybindFrame, Library.KeybindContainer = Library:AddDraggableMenu("Keybinds")
@@ -7167,7 +7126,7 @@ function Library:CreateWindow(WindowInfo)
             CanvasSize = UDim2.fromScale(0, 0),
             Position = UDim2.fromOffset(0, 49),
             ScrollBarThickness = 0,
-            Size = UDim2.new(0, InitialLeftWidth, 1, -TabsBottomOffset),
+            Size = UDim2.new(0, InitialLeftWidth, 1, -70),
             Parent = MainFrame,
         })
         New("UIListLayout", {
@@ -7182,7 +7141,7 @@ function Library:CreateWindow(WindowInfo)
             end,
             Name = "Container",
             Position = UDim2.new(1, 0, 0, 49),
-            Size = UDim2.new(1, -InitialLeftWidth - 1, 1, -TabsBottomOffset),
+            Size = UDim2.new(1, -InitialLeftWidth - 1, 1, -70),
             Parent = MainFrame,
         })
         New("UIPadding", {
@@ -7192,83 +7151,6 @@ function Library:CreateWindow(WindowInfo)
             PaddingTop = UDim.new(0, 0),
             Parent = Container,
         })
-
-        --// User Info \\--
-        do
-            UserButton = New("TextButton", {
-                BackgroundColor3 = "MainColor",
-                Name = "User",
-                Position = UDim2.new(0, 0, 1, -(BottomBarHeight + UserInfoHeight)),
-                Size = UDim2.new(0, InitialLeftWidth, 0, UserInfoHeight),
-                Text = "",
-                Visible = UserInfoEnabled,
-                Parent = MainFrame,
-            })
-
-            UserAvatarHolder = New("Frame", {
-                BackgroundColor3 = "OutlineColor",
-                ClipsDescendants = true,
-                Size = UDim2.fromOffset(UserAvatarSize, UserAvatarSize),
-                AnchorPoint = Vector2.new(0, 0.5),
-                Position = UserAvatarExpandedPos,
-                Parent = UserButton,
-            })
-            New("UICorner", {
-                CornerRadius = UDim.new(1, 0),
-                Parent = UserAvatarHolder,
-            })
-
-            UserAvatarImage = New("ImageLabel", {
-                Image = "",
-                Size = UDim2.fromScale(1, 1),
-                ScaleType = Enum.ScaleType.Crop,
-                Parent = UserAvatarHolder,
-            })
-
-            UserNameLabel = New("TextLabel", {
-                BackgroundTransparency = 1,
-                Position = UDim2.new(0, UserNameLeftOffset, 0, 0),
-                Size = UDim2.new(1, -(UserNameLeftOffset + UserNameRightOffset), 1, 0),
-                Text = "",
-                TextSize = 16,
-                TextTruncate = Enum.TextTruncate.AtEnd,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                Parent = UserButton,
-            })
-
-            UserStatusDot = New("Frame", {
-                AnchorPoint = Vector2.new(1, 0.5),
-                BackgroundColor3 = "OutlineColor",
-                Position = UDim2.new(1, -(UserPaddingX + UserArrowSize + UserStatusDotGap), 0.5, 0),
-                Size = UDim2.fromOffset(UserStatusDotSize, UserStatusDotSize),
-                Parent = UserButton,
-            })
-            New("UICorner", {
-                CornerRadius = UDim.new(1, 0),
-                Parent = UserStatusDot,
-            })
-
-            local ArrowIcon = Library:GetIcon("chevron-right")
-            local ArrowRotation = 0
-            if not ArrowIcon then
-                ArrowIcon = Library:GetIcon("chevron-up")
-                ArrowRotation = 90
-            end
-            if ArrowIcon then
-                UserArrow = New("ImageLabel", {
-                    AnchorPoint = Vector2.new(1, 0.5),
-                    Image = ArrowIcon.Url,
-                    ImageColor3 = "FontColor",
-                    ImageRectOffset = ArrowIcon.ImageRectOffset,
-                    ImageRectSize = ArrowIcon.ImageRectSize,
-                    ImageTransparency = 0.4,
-                    Position = UDim2.new(1, -UserPaddingX, 0.5, 0),
-                    Rotation = ArrowRotation,
-                    Size = UDim2.fromOffset(UserArrowSize, UserArrowSize),
-                    Parent = UserButton,
-                })
-            end
-        end
     end
 
     --// Window Table \\--
@@ -7279,115 +7161,6 @@ function Library:CreateWindow(WindowInfo)
 
         WindowTitle.Text = title
         WindowInfo.Title = title
-    end
-
-    local function ApplySidebarLayout()
-        DividerLine.Position = UDim2.fromOffset(SidebarWidth, 0)
-
-        TitleHolder.Size = UDim2.new(0, SidebarWidth, 1, 0)
-        RightWrapper.Size = UDim2.new(1, -SidebarWidth - 57 - 1, 1, -16)
-        Tabs.Size = UDim2.new(0, SidebarWidth, 1, -TabsBottomOffset)
-        Container.Size = UDim2.new(1, -SidebarWidth - 1, 1, -TabsBottomOffset)
-
-        if UserButton then
-            UserButton.Size = UDim2.new(0, SidebarWidth, 0, UserInfoHeight)
-        end
-    end
-
-    local function UpdateUserCompact()
-        if not UserButton then
-            return
-        end
-
-        UserButton.Visible = UserInfoEnabled
-        if UserAvatarHolder then
-            UserAvatarHolder.Position = IsCompact and UserAvatarCompactPos or UserAvatarExpandedPos
-        end
-        if UserNameLabel then
-            UserNameLabel.Visible = UserInfoEnabled and not IsCompact
-        end
-        if UserArrow then
-            UserArrow.Visible = UserInfoEnabled and not IsCompact
-        end
-        if UserStatusDot then
-            UserStatusDot.Visible = UserInfoEnabled and not IsCompact and not UserAnonymous
-        end
-    end
-
-    local function UpdateUserVisuals()
-        if not UserNameLabel or not UserAvatarImage then
-            return
-        end
-
-        local DisplayName = WindowInfo.User.AnonymousText
-        if UserAnonymous then
-            if DisplayName == "" then
-                DisplayName = "Anonymous"
-            end
-        else
-            if WindowInfo.User.DisplayName ~= "" then
-                DisplayName = WindowInfo.User.DisplayName
-            elseif WindowInfo.User.Name ~= "" then
-                DisplayName = WindowInfo.User.Name
-            else
-                local Player = Library.LocalPlayer
-                DisplayName = (Player.DisplayName and Player.DisplayName ~= "" and Player.DisplayName) or Player.Name
-            end
-        end
-
-        UserNameLabel.Text = DisplayName
-
-        local iconData = nil
-        local isIcon = false
-
-        if UserAnonymous then
-            iconData = Library:GetIcon("user")
-            isIcon = iconData ~= nil
-        else
-            if WindowInfo.User.Image ~= "" then
-                if typeof(WindowInfo.User.Image) == "number" then
-                    iconData = {
-                        Url = string.format("rbxassetid://%d", WindowInfo.User.Image),
-                        ImageRectOffset = Vector2.zero,
-                        ImageRectSize = Vector2.zero,
-                    }
-                elseif typeof(WindowInfo.User.Image) == "string" then
-                    iconData = Library:GetCustomIcon(WindowInfo.User.Image)
-                    if iconData ~= nil then
-                        isIcon = not IsValidCustomIcon(WindowInfo.User.Image)
-                    end
-                end
-            end
-        end
-
-        if iconData then
-            UserAvatarImage.Image = iconData.Url
-            UserAvatarImage.ImageRectOffset = iconData.ImageRectOffset or Vector2.zero
-            UserAvatarImage.ImageRectSize = iconData.ImageRectSize or Vector2.zero
-            UserAvatarImage.ImageColor3 = isIcon and "FontColor" or "WhiteColor"
-            UserAvatarImage.ImageTransparency = isIcon and 0.15 or 0
-            UserAvatarImage.ScaleType = isIcon and Enum.ScaleType.Fit or Enum.ScaleType.Crop
-        else
-            local Success, Thumbnail = pcall(
-                Players.GetUserThumbnailAsync,
-                Players,
-                Library.LocalPlayer.UserId,
-                Enum.ThumbnailType.HeadShot,
-                Enum.ThumbnailSize.Size48x48
-            )
-            if Success and Thumbnail then
-                UserAvatarImage.Image = Thumbnail
-                UserAvatarImage.ImageRectOffset = Vector2.zero
-                UserAvatarImage.ImageRectSize = Vector2.zero
-                UserAvatarImage.ImageColor3 = "WhiteColor"
-                UserAvatarImage.ImageTransparency = 0
-                UserAvatarImage.ScaleType = Enum.ScaleType.Crop
-            else
-                UserAvatarImage.Image = ""
-            end
-        end
-
-        UpdateUserCompact()
     end
 
     local function ApplyCompact()
@@ -7413,8 +7186,6 @@ function Library:CreateWindow(WindowInfo)
             Button.Padding.PaddingTop = UDim.new(0, IsCompact and 6 or 11)
             Button.Icon.SizeConstraint = IsCompact and Enum.SizeConstraint.RelativeXY or Enum.SizeConstraint.RelativeYY
         end
-
-        UpdateUserCompact()
     end
 
     function Window:IsSidebarCompacted()
@@ -7426,14 +7197,18 @@ function Library:CreateWindow(WindowInfo)
     end
 
     function Window:GetSidebarWidth()
-        return SidebarWidth
+        return Tabs.Size.X.Offset
     end
 
     function Window:SetSidebarWidth(Width)
         Width = math.clamp(Width, 48, MainFrame.Size.X.Offset - WindowInfo.MinContainerWidth - 1)
-        SidebarWidth = Width
 
-        ApplySidebarLayout()
+        DividerLine.Position = UDim2.fromOffset(Width, 0)
+
+        TitleHolder.Size = UDim2.new(0, Width, 1, 0)
+        RightWrapper.Size = UDim2.new(1, -Width - 57 - 1, 1, -16)
+        Tabs.Size = UDim2.new(0, Width, 1, -70)
+        Container.Size = UDim2.new(1, -Width - 1, 1, -70)
 
         if WindowInfo.EnableCompacting then
             ApplyCompact()
@@ -7442,64 +7217,6 @@ function Library:CreateWindow(WindowInfo)
             LastExpandedWidth = Width
         end
     end
-
-    Window.User = {}
-
-    function Window.User:Enable()
-        if UserInfoEnabled then
-            return
-        end
-
-        UserInfoEnabled = true
-        WindowInfo.User.Enabled = true
-        TabsBottomOffset = TabsBottomOffsetWithUser
-
-        if UserButton then
-            UserButton.Visible = true
-        end
-
-        ApplySidebarLayout()
-        UpdateUserCompact()
-    end
-
-    function Window.User:Disable()
-        if not UserInfoEnabled then
-            return
-        end
-
-        UserInfoEnabled = false
-        WindowInfo.User.Enabled = false
-        TabsBottomOffset = TabsBottomOffsetNoUser
-
-        if UserButton then
-            UserButton.Visible = false
-        end
-
-        ApplySidebarLayout()
-    end
-
-    function Window.User:SetAnonymous(State)
-        UserAnonymous = State and true or false
-        WindowInfo.User.Anonymous = UserAnonymous
-        UpdateUserVisuals()
-    end
-
-    function Window.User:SetCallback(Callback)
-        if Callback ~= nil then
-            assert(typeof(Callback) == "function", "Callback must be a function")
-        end
-
-        UserCallback = Callback
-        WindowInfo.User.Callback = Callback
-    end
-
-    if UserButton then
-        Library:GiveSignal(UserButton.MouseButton1Click:Connect(function()
-            Library:SafeCallback(UserCallback, Window.User)
-        end))
-    end
-
-    UpdateUserVisuals()
 
     function Window:ShowTabInfo(Name, Description)
         CurrentTabLabel.Text = Name
