@@ -2014,7 +2014,46 @@ do
         Info = Library:Validate(Info, Templates.KeyPicker)
 
         local ParentObj = self
+        local IsButton = ParentObj.Type == "Button" or ParentObj.Type == "SubButton"
+
+        if IsButton then
+            Info.SyncToggleState = false
+            Info.Modes = { "Press" }
+            Info.Mode = "Press"
+
+            if Info.Text == "KeyPicker" and typeof(ParentObj.Text) == "string" and ParentObj.Text ~= "" then
+                Info.Text = ParentObj.Text
+            end
+
+            ParentObj.Addons = ParentObj.Addons or {}
+            if not ParentObj.TextLabel and ParentObj.Base then
+                ParentObj.TextLabel = ParentObj.Base
+            end
+            if not ParentObj.KeybindSignal then
+                ParentObj.KeybindSignal = Instance.new("BindableEvent")
+            end
+            if Info.Callback == Templates.KeyPicker.Callback then
+                Info.Callback = function()
+                    if ParentObj.KeybindSignal then
+                        ParentObj.KeybindSignal:Fire()
+                    end
+                    if ParentObj.Disabled then
+                        return
+                    end
+                    if ParentObj.Locked then
+                        return
+                    end
+                    if ParentObj.Trigger then
+                        ParentObj:Trigger(ParentObj.KeybindSignal and ParentObj.KeybindSignal.Event)
+                    else
+                        Library:SafeCallback(ParentObj.Func)
+                    end
+                end
+            end
+        end
+
         local ToggleLabel = ParentObj.TextLabel
+        assert(ToggleLabel, "KeyPicker requires a TextLabel to attach to.")
 
         local KeyPicker = {
             Text = Info.Text,
@@ -2035,7 +2074,10 @@ do
         }
 
         if KeyPicker.Mode == "Press" then
-            assert(ParentObj.Type == "Label", "KeyPicker with the mode 'Press' can be only applied on Labels.")
+            assert(
+                ParentObj.Type == "Label" or IsButton,
+                "KeyPicker with the mode 'Press' can be only applied on Labels or Buttons."
+            )
 
             KeyPicker.SyncToggleState = false
             Info.Modes = { "Press" }
@@ -2190,6 +2232,25 @@ do
             Parent = ToggleLabel,
         })
 
+        local KeybindPadding
+        if IsButton and ToggleLabel:IsA("TextButton") then
+            Picker.AnchorPoint = Vector2.new(1, 0.5)
+            Picker.Position = UDim2.new(1, -6, 0.5, 0)
+
+            ToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+            ToggleLabel.TextTruncate = Enum.TextTruncate.AtEnd
+
+            if not ParentObj.KeybindPadding then
+                ParentObj.KeybindPadding = New("UIPadding", {
+                    Name = "KeybindPadding",
+                    PaddingLeft = UDim.new(0, 8),
+                    PaddingRight = UDim.new(0, 26),
+                    Parent = ToggleLabel,
+                })
+            end
+            KeybindPadding = ParentObj.KeybindPadding
+        end
+
         local KeybindsToggle = { Normal = KeyPicker.Mode ~= "Toggle" }
         do
             local Holder = New("TextButton", {
@@ -2339,6 +2400,10 @@ do
             )
             Picker.Text = PickerText or KeyPicker.DisplayValue
             Picker.Size = UDim2.fromOffset((X + 9), (Y + 4))
+
+            if IsButton and KeybindPadding then
+                KeybindPadding.PaddingRight = UDim.new(0, Picker.Size.X.Offset + 10)
+            end
         end
 
         function KeyPicker:Update()
@@ -3294,6 +3359,7 @@ do
             Risky = Info.Risky,
             Disabled = Info.Disabled,
             Visible = Info.Visible,
+            Addons = {},
 
             Tween = nil,
             Type = "Button",
@@ -3333,6 +3399,36 @@ do
             return Base, Stroke
         end
 
+        local function TriggerButton(Button, ConfirmEvent)
+            if Button.Disabled or Button.Locked then
+                return
+            end
+
+            if Button.DoubleClick then
+                Button.Locked = true
+
+                Button.Base.Text = "Are you sure?"
+                Button.Base.TextColor3 = Library.Scheme.AccentColor
+                Library.Registry[Button.Base].TextColor3 = "AccentColor"
+
+                local Clicked = WaitForEvent(ConfirmEvent or Button.Base.MouseButton1Click, 0.5)
+
+                Button.Base.Text = Button.Text
+                Button.Base.TextColor3 = Button.Risky and Library.Scheme.RedColor or Library.Scheme.FontColor
+                Library.Registry[Button.Base].TextColor3 = Button.Risky and "RedColor" or "FontColor"
+
+                if Clicked then
+                    Library:SafeCallback(Button.Func)
+                end
+
+                RunService.RenderStepped:Wait() --// Mouse Button fires without waiting (i hate roblox)
+                Button.Locked = false
+                return
+            end
+
+            Library:SafeCallback(Button.Func)
+        end
+
         local function InitEvents(Button)
             Button.Base.MouseEnter:Connect(function()
                 if Button.Disabled then
@@ -3356,37 +3452,21 @@ do
             end)
 
             Button.Base.MouseButton1Click:Connect(function()
-                if Button.Disabled or Button.Locked then
-                    return
-                end
-
-                if Button.DoubleClick then
-                    Button.Locked = true
-
-                    Button.Base.Text = "Are you sure?"
-                    Button.Base.TextColor3 = Library.Scheme.AccentColor
-                    Library.Registry[Button.Base].TextColor3 = "AccentColor"
-
-                    local Clicked = WaitForEvent(Button.Base.MouseButton1Click, 0.5)
-
-                    Button.Base.Text = Button.Text
-                    Button.Base.TextColor3 = Button.Risky and Library.Scheme.RedColor or Library.Scheme.FontColor
-                    Library.Registry[Button.Base].TextColor3 = Button.Risky and "RedColor" or "FontColor"
-
-                    if Clicked then
-                        Library:SafeCallback(Button.Func)
-                    end
-
-                    RunService.RenderStepped:Wait() --// Mouse Button fires without waiting (i hate roblox)
-                    Button.Locked = false
-                    return
-                end
-
-                Library:SafeCallback(Button.Func)
+                TriggerButton(Button)
             end)
         end
 
         Button.Base, Button.Stroke = CreateButton(Button)
+        Button.TextLabel = Button.Base
+        function Button:Trigger(ConfirmEvent)
+            TriggerButton(self, ConfirmEvent)
+        end
+        function Button:AddKeyPicker(...)
+            return BaseAddons.__index.AddKeyPicker(self, ...)
+        end
+        function Button:AddKeybind(...)
+            return BaseAddons.__index.AddKeyPicker(self, ...)
+        end
         InitEvents(Button)
 
         function Button:AddButton(...)
@@ -3404,6 +3484,7 @@ do
                 Risky = Info.Risky,
                 Disabled = Info.Disabled,
                 Visible = Info.Visible,
+                Addons = {},
 
                 Tween = nil,
                 Type = "SubButton",
@@ -3411,6 +3492,16 @@ do
 
             Button.SubButton = SubButton
             SubButton.Base, SubButton.Stroke = CreateButton(SubButton)
+            SubButton.TextLabel = SubButton.Base
+            function SubButton:Trigger(ConfirmEvent)
+                TriggerButton(self, ConfirmEvent)
+            end
+            function SubButton:AddKeyPicker(...)
+                return BaseAddons.__index.AddKeyPicker(self, ...)
+            end
+            function SubButton:AddKeybind(...)
+                return BaseAddons.__index.AddKeyPicker(self, ...)
+            end
             InitEvents(SubButton)
 
             function SubButton:UpdateColors()
@@ -5680,6 +5771,10 @@ function Library:Notify(...)
         Data.SoundId = Info.SoundId
         Data.Steps = Info.Steps
         Data.Persist = Info.Persist
+        Data.Icon = Info.Icon
+        Data.IconColor = Info.IconColor
+        Data.IconSize = Info.IconSize
+        Data.IconTransparency = Info.IconTransparency
     else
         Data.Description = tostring(Info)
         Data.Time = select(2, ...) or 5
@@ -5736,7 +5831,82 @@ function Library:Notify(...)
     local TitleX = 0
     local DescX = 0
 
+    local IconSpace = 0
+    local IconLabel
+
     local TimerFill
+
+    local ContentRow = New("Frame", {
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        Size = UDim2.fromScale(1, 0),
+        Parent = Holder,
+    })
+    New("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        HorizontalAlignment = Enum.HorizontalAlignment.Left,
+        Padding = UDim.new(0, 8),
+        Parent = ContentRow,
+    })
+
+    do
+        local IconData
+        if Data.Icon then
+            local IconValue = Data.Icon
+            if typeof(IconValue) == "number" then
+                IconValue = string.format("rbxassetid://%d", IconValue)
+            end
+            if typeof(IconValue) == "string" then
+                IconData = Library:GetCustomIcon(IconValue)
+            end
+        end
+
+        if IconData then
+            local IconPixelSize = 18
+            local IconSize = Data.IconSize
+            local IconSizeUDim = UDim2.fromOffset(IconPixelSize, IconPixelSize)
+
+            if typeof(IconSize) == "number" then
+                IconPixelSize = IconSize
+                IconSizeUDim = UDim2.fromOffset(IconSize, IconSize)
+            elseif typeof(IconSize) == "UDim2" then
+                IconSizeUDim = IconSize
+                if IconSize.X.Scale == 0 then
+                    IconPixelSize = IconSize.X.Offset
+                end
+            end
+
+            IconLabel = New("ImageLabel", {
+                BackgroundTransparency = 1,
+                Image = IconData.Url,
+                ImageRectOffset = IconData.ImageRectOffset,
+                ImageRectSize = IconData.ImageRectSize,
+                ImageColor3 = Data.IconColor or "FontColor",
+                ImageTransparency = Data.IconTransparency or 0,
+                Size = IconSizeUDim,
+                Parent = ContentRow,
+            })
+
+            IconSpace = IconPixelSize + 8
+        end
+    end
+
+    local TextHolder = New("Frame", {
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        Size = UDim2.fromScale(1, 0),
+        Parent = ContentRow,
+    })
+    New("UIFlexItem", {
+        FlexMode = Enum.UIFlexMode.Grow,
+        Parent = TextHolder,
+    })
+    New("UIListLayout", {
+        FillDirection = Enum.FillDirection.Vertical,
+        HorizontalAlignment = Enum.HorizontalAlignment.Left,
+        Padding = UDim.new(0, 4),
+        Parent = TextHolder,
+    })
 
     if Data.Title then
         Title = New("TextLabel", {
@@ -5747,7 +5917,7 @@ function Library:Notify(...)
             TextSize = 15,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextWrapped = true,
-            Parent = Holder,
+            Parent = TextHolder,
         })
     end
 
@@ -5760,26 +5930,29 @@ function Library:Notify(...)
             TextSize = 14,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextWrapped = true,
-            Parent = Holder,
+            Parent = TextHolder,
         })
     end
 
     function Data:Resize()
+        local AvailableWidth =
+            math.max((NotificationArea.AbsoluteSize.X / Library.DPIScale) - 24 - IconSpace, 0)
+
         if Title then
             local X, Y =
-                Library:GetTextBounds(Title.Text, Title.FontFace, Title.TextSize, (NotificationArea.AbsoluteSize.X / Library.DPIScale) - 24)
+                Library:GetTextBounds(Title.Text, Title.FontFace, Title.TextSize, AvailableWidth)
             Title.Size = UDim2.fromOffset(0, Y)
             TitleX = X
         end
 
         if Desc then
             local X, Y =
-                Library:GetTextBounds(Desc.Text, Desc.FontFace, Desc.TextSize, (NotificationArea.AbsoluteSize.X / Library.DPIScale) - 24)
+                Library:GetTextBounds(Desc.Text, Desc.FontFace, Desc.TextSize, AvailableWidth)
             Desc.Size = UDim2.fromOffset(0, Y)
             DescX = X
         end
 
-        FakeBackground.Size = UDim2.fromOffset(math.max(TitleX, DescX) + 24, 0)
+        FakeBackground.Size = UDim2.fromOffset(math.max(TitleX, DescX) + 24 + IconSpace, 0)
     end
 
     function Data:ChangeTitle(Text)
