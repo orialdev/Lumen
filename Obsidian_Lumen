@@ -138,7 +138,7 @@ do
         return success, errorMessage
     end
 
-    for AssetName, _ in CustomImageManagerAssets do
+    for AssetName, _ in pairs(CustomImageManagerAssets) do
         CustomImageManager.DownloadAsset(AssetName)
     end
 end
@@ -467,62 +467,19 @@ local function GetSchemeValue(Index)
 end
 
 --// Basic Functions \\--
-local function GetCurrentCamera()
-    local Camera = workspace.CurrentCamera
-    if Camera then
-        return Camera
-    end
-
-    Camera = workspace:FindFirstChildWhichIsA("Camera")
-    if Camera then
-        workspace.CurrentCamera = Camera
-    end
-
-    return Camera
-end
-
-local function GetViewportSize()
-    local Camera = GetCurrentCamera()
-    if Camera then
-        return Camera.ViewportSize
-    end
-
-    return Vector2.new(1920, 1080)
-end
-
 local function WaitForEvent(Event, Timeout, Condition)
     local Bindable = Instance.new("BindableEvent")
-    local Completed = false
-    local TimeoutThread
-
-    local function Finish(Result: boolean)
-        if Completed then
-            return
-        end
-        Completed = true
-
-        if TimeoutThread then
-            task.cancel(TimeoutThread)
-        end
-
-        Bindable:Fire(Result)
-    end
-
     local Connection = Event:Once(function(...)
-        if not Condition or (typeof(Condition) == "function" and Condition(...)) then
-            Finish(true)
+        if not Condition or typeof(Condition) == "function" and Condition(...) then
+            Bindable:Fire(true)
         else
-            Finish(false)
+            Bindable:Fire(false)
         end
     end)
-    if typeof(Timeout) == "number" then
-        TimeoutThread = task.delay(Timeout, function()
-            if Connection and Connection.Connected then
-                Connection:Disconnect()
-            end
-            Finish(false)
-        end)
-    end
+    task.delay(Timeout, function()
+        Connection:Disconnect()
+        Bindable:Fire(false)
+    end)
 
     local Result = Bindable.Event:Wait()
     Bindable:Destroy()
@@ -553,7 +510,7 @@ end
 local function GetTableSize(Table: { [any]: any })
     local Size = 0
 
-    for _, _ in Table do
+    for _, _ in pairs(Table) do
         Size += 1
     end
 
@@ -573,7 +530,7 @@ local function Round(Value, Rounding)
     assert(Rounding >= 0, "Invalid rounding number.")
 
     if Rounding == 0 then
-        return tonumber(string.format("%.0f", Value))
+        return math.floor(Value)
     end
 
     return tonumber(string.format("%." .. Rounding .. "f", Value))
@@ -606,7 +563,7 @@ local function GetTeams()
 end
 
 function Library:UpdateDependencyBoxes()
-    for _, Depbox in Library.DependencyBoxes do
+    for _, Depbox in ipairs(Library.DependencyBoxes) do
         Depbox:Update(true)
     end
 
@@ -618,7 +575,7 @@ end
 local function CheckDepbox(Box, Search)
     local VisibleElements = 0
 
-    for _, ElementInfo in Box.Elements do
+    for _, ElementInfo in ipairs(Box.Elements) do
         if ElementInfo.Type == "Divider" then
             ElementInfo.Holder.Visible = false
             continue
@@ -654,7 +611,7 @@ local function CheckDepbox(Box, Search)
         end
     end
 
-    for _, Depbox in Box.DependencyBoxes do
+    for _, Depbox in ipairs(Box.DependencyBoxes) do
         if not Depbox.Visible then
             continue
         end
@@ -666,7 +623,7 @@ local function CheckDepbox(Box, Search)
     return VisibleElements
 end
 local function RestoreDepbox(Box)
-    for _, ElementInfo in Box.Elements do
+    for _, ElementInfo in ipairs(Box.Elements) do
         ElementInfo.Holder.Visible = typeof(ElementInfo.Visible) == "boolean" and ElementInfo.Visible or true
 
         if ElementInfo.SubButton then
@@ -678,7 +635,7 @@ local function RestoreDepbox(Box)
     Box:Resize()
     Box.Holder.Visible = true
 
-    for _, Depbox in Box.DependencyBoxes do
+    for _, Depbox in ipairs(Box.DependencyBoxes) do
         if not Depbox.Visible then
             continue
         end
@@ -695,10 +652,10 @@ local function ApplySearchToTab(Tab, Search)
     local HasVisible = false
 
     --// Loop through Groupboxes to get Elements Info
-    for _, Groupbox in Tab.Groupboxes do
+    for _, Groupbox in pairs(Tab.Groupboxes) do
         local VisibleElements = 0
 
-        for _, ElementInfo in Groupbox.Elements do
+        for _, ElementInfo in ipairs(Groupbox.Elements) do
             if ElementInfo.Type == "Divider" then
                 ElementInfo.Holder.Visible = false
                 continue
@@ -734,7 +691,7 @@ local function ApplySearchToTab(Tab, Search)
             end
         end
 
-        for _, Depbox in Groupbox.DependencyBoxes do
+        for _, Depbox in ipairs(Groupbox.DependencyBoxes) do
             if not Depbox.Visible then
                 continue
             end
@@ -750,14 +707,14 @@ local function ApplySearchToTab(Tab, Search)
         Groupbox.BoxHolder.Visible = VisibleElements > 0
     end
 
-    for _, Tabbox in Tab.Tabboxes do
+    for _, Tabbox in pairs(Tab.Tabboxes) do
         local VisibleTabs = 0
         local VisibleElements = {}
 
-        for _, SubTab in Tabbox.Tabs do
+        for _, SubTab in pairs(Tabbox.Tabs) do
             VisibleElements[SubTab] = 0
 
-            for _, ElementInfo in SubTab.Elements do
+            for _, ElementInfo in ipairs(SubTab.Elements) do
                 if ElementInfo.Type == "Divider" then
                     ElementInfo.Holder.Visible = false
                     continue
@@ -793,7 +750,7 @@ local function ApplySearchToTab(Tab, Search)
                 end
             end
 
-            for _, Depbox in SubTab.DependencyBoxes do
+            for _, Depbox in ipairs(SubTab.DependencyBoxes) do
                 if not Depbox.Visible then
                     continue
                 end
@@ -802,7 +759,7 @@ local function ApplySearchToTab(Tab, Search)
             end
         end
 
-        for SubTab, Visible in VisibleElements do
+        for SubTab, Visible in pairs(VisibleElements) do
             SubTab.ButtonHolder.Visible = Visible > 0
             if Visible > 0 then
                 VisibleTabs += 1
@@ -827,8 +784,8 @@ local function ResetTab(Tab)
         return
     end
 
-    for _, Groupbox in Tab.Groupboxes do
-        for _, ElementInfo in Groupbox.Elements do
+    for _, Groupbox in pairs(Tab.Groupboxes) do
+        for _, ElementInfo in ipairs(Groupbox.Elements) do
             ElementInfo.Holder.Visible = typeof(ElementInfo.Visible) == "boolean" and ElementInfo.Visible or true
 
             if ElementInfo.SubButton then
@@ -837,7 +794,7 @@ local function ResetTab(Tab)
             end
         end
 
-        for _, Depbox in Groupbox.DependencyBoxes do
+        for _, Depbox in ipairs(Groupbox.DependencyBoxes) do
             if not Depbox.Visible then
                 continue
             end
@@ -849,9 +806,9 @@ local function ResetTab(Tab)
         Groupbox.BoxHolder.Visible = true
     end
 
-    for _, Tabbox in Tab.Tabboxes do
-        for _, SubTab in Tabbox.Tabs do
-            for _, ElementInfo in SubTab.Elements do
+    for _, Tabbox in pairs(Tab.Tabboxes) do
+        for _, SubTab in pairs(Tabbox.Tabs) do
+            for _, ElementInfo in ipairs(SubTab.Elements) do
                 ElementInfo.Holder.Visible = typeof(ElementInfo.Visible) == "boolean" and ElementInfo.Visible or true
 
                 if ElementInfo.SubButton then
@@ -860,7 +817,7 @@ local function ResetTab(Tab)
                 end
             end
 
-            for _, Depbox in SubTab.DependencyBoxes do
+            for _, Depbox in ipairs(SubTab.DependencyBoxes) do
                 if not Depbox.Visible then
                     continue
                 end
@@ -884,7 +841,7 @@ function Library:UpdateSearch(SearchText)
     local TabsToReset = {}
 
     if Library.GlobalSearch then
-        for _, Tab in Library.Tabs do
+        for _, Tab in pairs(Library.Tabs) do
             if typeof(Tab) == "table" and not Tab.IsKeyTab then
                 table.insert(TabsToReset, Tab)
             end
@@ -916,7 +873,7 @@ function Library:UpdateSearch(SearchText)
     if Library.GlobalSearch then
         TabsToSearch = TabsToReset
         if #TabsToSearch == 0 then
-            for _, Tab in Library.Tabs do
+            for _, Tab in pairs(Library.Tabs) do
                 if typeof(Tab) == "table" and not Tab.IsKeyTab then
                     table.insert(TabsToSearch, Tab)
                 end
@@ -971,8 +928,8 @@ function Library:RemoveFromRegistry(Instance)
 end
 
 function Library:UpdateColorsUsingRegistry()
-    for Instance, Properties in Library.Registry do
-        for Property, Index in Properties do
+    for Instance, Properties in pairs(Library.Registry) do
+        for Property, Index in pairs(Properties) do
             local SchemeValue = GetSchemeValue(Index)
 
             if SchemeValue or typeof(Index) == "function" then
@@ -986,17 +943,17 @@ function Library:SetDPIScale(DPIScale: number)
     Library.DPIScale = DPIScale / 100
     Library.MinSize = Library.OriginalMinSize * Library.DPIScale
 
-    for _, UIScale in Library.Scales do
+    for _, UIScale in ipairs(Library.Scales) do
         UIScale.Scale = Library.DPIScale
     end
 
-    for _, Option in Options do
+    for _, Option in pairs(Options) do
         if Option.Type == "Dropdown" then
             Option:RecalculateListSize()
         end
     end
 
-    for _, Notification in Library.Notifications do
+    for _, Notification in pairs(Library.Notifications) do
         Notification:Resize()
     end
 end
@@ -1059,25 +1016,12 @@ function Library:GetCustomIcon(IconName: string)
     end
 end
 
-local function DeepCopy(Value)
-    if typeof(Value) ~= "table" then
-        return Value
-    end
-
-    local Copy = {}
-    for Key, Entry in Value do
-        Copy[Key] = DeepCopy(Entry)
-    end
-
-    return Copy
-end
-
 function Library:Validate(Table: { [string]: any }, Template: { [string]: any }): { [string]: any }
     if typeof(Table) ~= "table" then
-        return DeepCopy(Template)
+        return Template
     end
 
-    for k, v in Template do
+    for k, v in pairs(Template) do
         if typeof(k) == "number" then
             continue
         end
@@ -1096,7 +1040,7 @@ end
 local function FillInstance(Table: { [string]: any }, Instance: GuiObject)
     local ThemeProperties = Library.Registry[Instance] or {}
 
-    for key, value in Table do
+    for key, value in pairs(Table) do
         if ThemeProperties[key] then
             ThemeProperties[key] = nil
         
@@ -1318,9 +1262,7 @@ function Library:GetTextBounds(Text: string, Font: Font, Size: number, Width: nu
     Params.RichText = true
     Params.Font = Font
     Params.Size = Size
-    local ViewportSize = GetViewportSize()
-    local MaxWidth = Width or (ViewportSize.X - 32)
-    Params.Width = math.max(1, MaxWidth)
+    Params.Width = Width or workspace.CurrentCamera.ViewportSize.X - 32
 
     local Bounds = TextService:GetTextBoundsAsync(Params)
     return Bounds.X, Bounds.Y
@@ -1510,8 +1452,9 @@ function Library:AddBlank(Frame: GuiObject, Size: UDim2)
     })
 end
 
---// Compatibility \\--
+--// Deprecated \\--
 function Library:MakeOutline(Frame: GuiObject, Corner: number?, ZIndex: number?)
+    warn("Obsidian:MakeOutline is deprecated, please use Obsidian:AddOutline instead.")
     local Holder = New("Frame", {
         BackgroundColor3 = "DarkColor",
         Position = UDim2.fromOffset(-2, -2),
@@ -1693,16 +1636,18 @@ function Library:AddDraggableMenu(Name: string)
     return Holder, Container
 end
 
---// Watermark - Compatibility \\--
+--// Watermark - Deprecated \\--
 do
     local WatermarkLabel = Library:AddDraggableLabel("")
     WatermarkLabel:SetVisible(false)
 
     function Library:SetWatermark(Text: string)
+        warn("Watermark is deprecated, please use Library:AddDraggableLabel instead.")
         WatermarkLabel:SetText(Text)
     end
 
     function Library:SetWatermarkVisibility(Visible: boolean)
+        warn("Watermark is deprecated, please use Library:AddDraggableLabel instead.")
         WatermarkLabel:SetVisible(Visible)
     end
 end
@@ -1894,15 +1839,14 @@ TooltipLabel:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
         return
     end
 
-    local ViewportSize = GetViewportSize()
     local X, _ = Library:GetTextBounds(
         TooltipLabel.Text,
         TooltipLabel.FontFace,
         TooltipLabel.TextSize,
-        (ViewportSize.X - TooltipLabel.AbsolutePosition.X - 8) / Library.DPIScale
+        (workspace.CurrentCamera.ViewportSize.X - TooltipLabel.AbsolutePosition.X - 8) / Library.DPIScale
     )
 
-    TooltipLabel.Size = UDim2.fromOffset(X + 8, TooltipLabel.AbsoluteSize.Y)
+    TooltipLabel.Size = UDim2.fromOffset(X + 8)
 end)
 
 local CurrentHoverInstance
@@ -1981,7 +1925,7 @@ function Library:AddTooltip(InfoStr: string, DisabledInfoStr: string, HoverInsta
         end
     end
 
-    table.insert(Tooltips, TooltipTable)
+    table.insert(Tooltips, TooltipLabel)
     return TooltipTable
 end
 
@@ -1997,11 +1941,11 @@ function Library:Unload()
         end
     end
 
-    for _, Callback in Library.UnloadSignals do
+    for _, Callback in ipairs(Library.UnloadSignals) do
         Library:SafeCallback(Callback)
     end
 
-    for _, Tooltip in Tooltips do
+    for _, Tooltip in ipairs(Tooltips) do
         Library:SafeCallback(Tooltip.Destroy, Tooltip)
     end
 
@@ -2037,43 +1981,7 @@ do
         Info = Library:Validate(Info, Templates.KeyPicker)
 
         local ParentObj = self
-        local IsButton = ParentObj.Type == "Button" or ParentObj.Type == "SubButton"
-
-        if IsButton then
-            Info.Mode = "Press"
-            Info.Modes = { "Press" }
-            Info.SyncToggleState = false
-
-            if Info.Text == Templates.KeyPicker.Text then
-                Info.Text = ParentObj.Text or Info.Text
-            end
-
-            if Info.Callback == Templates.KeyPicker.Callback or Info.Callback == nil then
-                Info.Callback = function()
-                    if ParentObj.Disabled then
-                        return
-                    end
-
-                    if ParentObj.Press then
-                        ParentObj:Press()
-                    else
-                        Library:SafeCallback(ParentObj.Func)
-                    end
-                end
-            end
-        end
-
-        local ToggleLabel = ParentObj.TextLabel or ParentObj.Base
-        assert(ToggleLabel, "KeyPicker parent is missing.")
-
-        if IsButton and not ToggleLabel:FindFirstChildOfClass("UIListLayout") then
-            New("UIListLayout", {
-                FillDirection = Enum.FillDirection.Horizontal,
-                HorizontalAlignment = Enum.HorizontalAlignment.Right,
-                Padding = UDim.new(0, 6),
-                Parent = ToggleLabel,
-            })
-        end
+        local ToggleLabel = ParentObj.TextLabel
 
         local KeyPicker = {
             Text = Info.Text,
@@ -2094,10 +2002,7 @@ do
         }
 
         if KeyPicker.Mode == "Press" then
-            assert(
-                ParentObj.Type == "Label" or IsButton,
-                "KeyPicker with the mode 'Press' can be only applied on Labels or Buttons."
-            )
+            assert(ParentObj.Type == "Label", "KeyPicker with the mode 'Press' can be only applied on Labels.")
 
             KeyPicker.SyncToggleState = false
             Info.Modes = { "Press" }
@@ -2113,17 +2018,6 @@ do
         end
 
         local Picking = false
-        local KEYCAP_HEIGHT = 20
-        local KEYCAP_MIN_WIDTH = 28
-        local KEYCAP_MAX_WIDTH = 160
-        local KEYCAP_PADDING_X = 6
-        local KEYCAP_TEXT_SIZE = 12
-
-        local KEYBIND_ROW_HEIGHT = 26
-        local KEYBIND_BADGE_HEIGHT = 16
-        local KEYBIND_BADGE_MIN_WIDTH = 34
-        local KEYBIND_BADGE_MAX_WIDTH = 96
-        local KEYBIND_BADGE_PADDING_X = 6
 
         -- Special Keys
         local SpecialKeys = {
@@ -2167,109 +2061,6 @@ do
             [Enum.KeyCode.CapsLock] = "CapsLock",
         }
 
-        local KeyLabelAliases = {
-            LeftControl = "LCtrl",
-            RightControl = "RCtrl",
-            LeftShift = "LShift",
-            RightShift = "RShift",
-            LeftAlt = "LAlt",
-            RightAlt = "RAlt",
-            LeftSuper = "LWin",
-            RightSuper = "RWin",
-            LeftMeta = "LWin",
-            RightMeta = "RWin",
-
-            PageUp = "PgUp",
-            PageDown = "PgDn",
-            Backspace = "Bksp",
-            Return = "Enter",
-            Escape = "Esc",
-            CapsLock = "Caps",
-            Insert = "Ins",
-            Delete = "Del",
-            Print = "PrtScr",
-            PrintScreen = "PrtScr",
-            ScrollLock = "ScrLk",
-            NumLock = "Num",
-
-            LeftBracket = "[",
-            RightBracket = "]",
-            BackSlash = "\\",
-            Slash = "/",
-            Semicolon = ";",
-            Quote = "'",
-            Comma = ",",
-            Period = ".",
-            Minus = "-",
-            Equals = "=",
-            Grave = "`",
-            Backquote = "`",
-
-            KeypadOne = "Num1",
-            KeypadTwo = "Num2",
-            KeypadThree = "Num3",
-            KeypadFour = "Num4",
-            KeypadFive = "Num5",
-            KeypadSix = "Num6",
-            KeypadSeven = "Num7",
-            KeypadEight = "Num8",
-            KeypadNine = "Num9",
-            KeypadZero = "Num0",
-            KeypadDivide = "Num/",
-            KeypadMultiply = "Num*",
-            KeypadMinus = "Num-",
-            KeypadPlus = "Num+",
-            KeypadEnter = "NumEnt",
-            KeypadDecimal = "Num.",
-        }
-
-        local function FormatKeyLabel(Key)
-            if typeof(Key) ~= "string" then
-                return ""
-            end
-
-            local Alias = KeyLabelAliases[Key]
-            return (Alias or Key):upper()
-        end
-
-        local function BuildDisplayValue(Key, CurrentModifiers)
-            if Key == "None" then
-                return "NONE"
-            end
-            if Key == "Unknown" then
-                return "UNKNOWN"
-            end
-
-            local Parts = {}
-            if typeof(CurrentModifiers) == "table" then
-                for _, Modifier in CurrentModifiers do
-                    Parts[#Parts + 1] = FormatKeyLabel(Modifier)
-                end
-            end
-
-            if Key then
-                Parts[#Parts + 1] = FormatKeyLabel(Key)
-            end
-
-            if #Parts == 0 then
-                return "NONE"
-            end
-
-            return table.concat(Parts, "+")
-        end
-
-        local function GetKeycapWidth(Text, FontFace, TextSize)
-            local X = Library:GetTextBounds(Text, FontFace, TextSize)
-            local Width = math.floor(X + KEYCAP_PADDING_X * 2)
-            return math.clamp(Width, KEYCAP_MIN_WIDTH, KEYCAP_MAX_WIDTH)
-        end
-
-        local function GetBadgeWidth(Text, FontFace, TextSize)
-            local X = Library:GetTextBounds(Text, FontFace, TextSize)
-            local Width = math.floor(X + KEYBIND_BADGE_PADDING_X * 2)
-            return math.clamp(Width, KEYBIND_BADGE_MIN_WIDTH, KEYBIND_BADGE_MAX_WIDTH)
-        end
-
         local IsModifierInput = function(Input)
             return Input.UserInputType == Enum.UserInputType.Keyboard and ModifiersInput[Input.KeyCode] ~= nil
         end
@@ -2277,7 +2068,7 @@ do
         local GetActiveModifiers = function()
             local ActiveModifiers = {}
 
-            for Name, Input in Modifiers do
+            for Name, Input in pairs(Modifiers) do
                 if table.find(ActiveModifiers, Name) then
                     continue
                 end
@@ -2299,7 +2090,7 @@ do
             local ActiveModifiers = GetActiveModifiers()
             local Holding = true
 
-            for _, Name in Required do
+            for _, Name in ipairs(Required) do
                 if table.find(ActiveModifiers, Name) then
                     continue
                 end
@@ -2329,7 +2120,7 @@ do
         local ConvertToInputModifiers = function(CurrentModifiers)
             local InputModifiers = {}
 
-            for _, name in CurrentModifiers do
+            for _, name in ipairs(CurrentModifiers) do
                 table.insert(InputModifiers, Modifiers[name])
             end
 
@@ -2343,7 +2134,7 @@ do
 
             local ValidModifiers = {}
 
-            for _, name in CurrentModifiers do
+            for _, name in ipairs(CurrentModifiers) do
                 if not Modifiers[name] then
                     continue
                 end
@@ -2355,245 +2146,72 @@ do
         end
 
         KeyPicker.Modifiers = VerifyModifiers(KeyPicker.Modifiers) -- Verify default modifiers
-        KeyPicker.DisplayValue = BuildDisplayValue(KeyPicker.Value, KeyPicker.Modifiers)
 
         local Picker = New("TextButton", {
-            BackgroundColor3 = "BackgroundColor",
+            BackgroundColor3 = "MainColor",
             BorderColor3 = "OutlineColor",
             BorderSizePixel = 1,
-            Size = UDim2.fromOffset(KEYCAP_MIN_WIDTH, KEYCAP_HEIGHT),
-            Text = "",
-            TextSize = KEYCAP_TEXT_SIZE,
-            TextTruncate = Enum.TextTruncate.AtEnd,
+            Size = UDim2.fromOffset(18, 18),
+            Text = KeyPicker.Value,
+            TextSize = 14,
             Parent = ToggleLabel,
         })
-        New("UICorner", {
-            CornerRadius = UDim.new(0, math.max(2, math.floor(Library.CornerRadius / 2))),
-            Parent = Picker,
-        })
-        New("UIPadding", {
-            PaddingLeft = UDim.new(0, KEYCAP_PADDING_X),
-            PaddingRight = UDim.new(0, KEYCAP_PADDING_X),
-            Parent = Picker,
-        })
 
-        local function SetPickerText(Text)
-            local Width = GetKeycapWidth(Text, Picker.FontFace, Picker.TextSize)
-            Picker.Text = Text
-            Picker.Size = UDim2.fromOffset(Width, KEYCAP_HEIGHT)
-        end
-
-        local function ShouldShowKeybindToggle()
-            return Library.ShowToggleFrameInKeybinds
-        end
-
-        local KeybindsToggle = { Normal = not ShouldShowKeybindToggle() }
+        local KeybindsToggle = { Normal = KeyPicker.Mode ~= "Toggle" }
         do
             local Holder = New("TextButton", {
                 BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, KEYBIND_ROW_HEIGHT),
+                Size = UDim2.new(1, 0, 0, 16),
                 Text = "",
                 Visible = not Info.NoUI,
                 Parent = Library.KeybindContainer,
             })
 
-            local Row = New("Frame", {
+            local Label = New("TextLabel", {
+                AutomaticSize = Enum.AutomaticSize.X,
+                BackgroundTransparency = 1,
+                Size = UDim2.fromScale(0, 1),
+                Text = "",
+                TextSize = 14,
+                TextTransparency = 0.5,
+                Parent = Holder,
+            })
+
+            local Checkbox = New("Frame", {
+                AnchorPoint = Vector2.new(0, 0.5),
                 BackgroundColor3 = "MainColor",
-                Size = UDim2.fromScale(1, 1),
+                Position = UDim2.fromScale(0, 0.5),
+                Size = UDim2.fromOffset(14, 14),
+                SizeConstraint = Enum.SizeConstraint.RelativeYY,
                 Parent = Holder,
             })
             New("UICorner", {
-                CornerRadius = UDim.new(0, Library.CornerRadius),
-                Parent = Row,
+                CornerRadius = UDim.new(0, Library.CornerRadius / 2),
+                Parent = Checkbox,
             })
-            local RowStroke = New("UIStroke", {
+            New("UIStroke", {
                 Color = "OutlineColor",
-                Parent = Row,
-            })
-            New("UIPadding", {
-                PaddingBottom = UDim.new(0, 3),
-                PaddingLeft = UDim.new(0, 8),
-                PaddingRight = UDim.new(0, 8),
-                PaddingTop = UDim.new(0, 3),
-                Parent = Row,
-            })
-            New("UIListLayout", {
-                FillDirection = Enum.FillDirection.Horizontal,
-                VerticalAlignment = Enum.VerticalAlignment.Center,
-                Padding = UDim.new(0, 6),
-                Parent = Row,
+                Parent = Checkbox,
             })
 
-            local Keycap = New("Frame", {
-                BackgroundColor3 = "BackgroundColor",
-                Size = UDim2.fromOffset(KEYCAP_MIN_WIDTH, KEYCAP_HEIGHT),
-                Parent = Row,
+            local CheckImage = New("ImageLabel", {
+                Image = CheckIcon and CheckIcon.Url or "",
+                ImageColor3 = "FontColor",
+                ImageRectOffset = CheckIcon and CheckIcon.ImageRectOffset or Vector2.zero,
+                ImageRectSize = CheckIcon and CheckIcon.ImageRectSize or Vector2.zero,
+                ImageTransparency = 1,
+                Position = UDim2.fromOffset(2, 2),
+                Size = UDim2.new(1, -4, 1, -4),
+                Parent = Checkbox,
             })
-            New("UICorner", {
-                CornerRadius = UDim.new(0, math.max(2, math.floor(Library.CornerRadius / 2))),
-                Parent = Keycap,
-            })
-            local KeycapStroke = New("UIStroke", {
-                Color = "OutlineColor",
-                Parent = Keycap,
-            })
-            New("UIPadding", {
-                PaddingLeft = UDim.new(0, KEYCAP_PADDING_X),
-                PaddingRight = UDim.new(0, KEYCAP_PADDING_X),
-                Parent = Keycap,
-            })
-
-            local KeyLabel = New("TextLabel", {
-                BackgroundTransparency = 1,
-                Size = UDim2.fromScale(1, 1),
-                Text = "",
-                TextSize = KEYCAP_TEXT_SIZE,
-                TextTruncate = Enum.TextTruncate.AtEnd,
-                Parent = Keycap,
-            })
-
-            local TextHolder = New("Frame", {
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 1, 0),
-                Parent = Row,
-            })
-            New("UIFlexItem", {
-                FlexMode = Enum.UIFlexMode.Grow,
-                Parent = TextHolder,
-            })
-            New("UIListLayout", {
-                FillDirection = Enum.FillDirection.Vertical,
-                VerticalAlignment = Enum.VerticalAlignment.Center,
-                Padding = UDim.new(0, 1),
-                Parent = TextHolder,
-            })
-
-            local ActionLabel = New("TextLabel", {
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 12),
-                Text = "",
-                TextSize = 12,
-                TextTransparency = 0.35,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                TextTruncate = Enum.TextTruncate.AtEnd,
-                Parent = TextHolder,
-            })
-
-            local ModeLabel = New("TextLabel", {
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 10),
-                Text = "",
-                TextSize = 10,
-                TextTransparency = 0.6,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                TextTruncate = Enum.TextTruncate.AtEnd,
-                Parent = TextHolder,
-            })
-
-            local StateBadge = New("TextLabel", {
-                BackgroundColor3 = "BackgroundColor",
-                BorderColor3 = "OutlineColor",
-                BorderSizePixel = 1,
-                Size = UDim2.fromOffset(KEYBIND_BADGE_MIN_WIDTH, KEYBIND_BADGE_HEIGHT),
-                Text = "",
-                TextSize = 10,
-                TextTransparency = 0,
-                TextXAlignment = Enum.TextXAlignment.Center,
-                Parent = Row,
-            })
-            New("UICorner", {
-                CornerRadius = UDim.new(0, math.max(2, math.floor(Library.CornerRadius / 2))),
-                Parent = StateBadge,
-            })
-            New("UIPadding", {
-                PaddingLeft = UDim.new(0, KEYBIND_BADGE_PADDING_X),
-                PaddingRight = UDim.new(0, KEYBIND_BADGE_PADDING_X),
-                Parent = StateBadge,
-            })
-
-            local function SetKeycapText(Text)
-                KeyLabel.Text = Text
-                Keycap.Size = UDim2.fromOffset(GetKeycapWidth(Text, KeyLabel.FontFace, KeyLabel.TextSize), KEYCAP_HEIGHT)
-            end
-
-            local function SetBadgeText(Text)
-                StateBadge.Text = Text
-                StateBadge.Size =
-                    UDim2.fromOffset(GetBadgeWidth(Text, StateBadge.FontFace, StateBadge.TextSize), KEYBIND_BADGE_HEIGHT)
-            end
 
             function KeybindsToggle:Display(State)
-                local Mode = KeyPicker.Mode or "Toggle"
-                local IsUnbound = KeyPicker.Value == "None" or KeyPicker.Value == "Unknown"
-                local IsActive = (Mode == "Always") or (not IsUnbound and State)
-
-                local BadgeText
-                if IsUnbound then
-                    BadgeText = "UNBOUND"
-                elseif Mode == "Toggle" then
-                    BadgeText = IsActive and "ON" or "OFF"
-                elseif Mode == "Hold" then
-                    BadgeText = "HOLD"
-                elseif Mode == "Press" then
-                    BadgeText = "PRESS"
-                elseif Mode == "Always" then
-                    BadgeText = "ON"
-                else
-                    BadgeText = tostring(Mode):upper()
-                end
-
-                SetBadgeText(BadgeText)
-
-                if IsUnbound then
-                    RowStroke.Color = Library.Scheme.RedColor
-                    StateBadge.BackgroundColor3 = Library.Scheme.RedColor
-                    StateBadge.BorderColor3 = Library.Scheme.RedColor
-                    Row.BackgroundColor3 = Library:GetBetterColor(Library.Scheme.MainColor, 1)
-
-                    Library.Registry[RowStroke].Color = "RedColor"
-                    Library.Registry[StateBadge].BackgroundColor3 = "RedColor"
-                    Library.Registry[StateBadge].BorderColor3 = "RedColor"
-                    Library.Registry[Row].BackgroundColor3 = function()
-                        return Library:GetBetterColor(Library.Scheme.MainColor, 1)
-                    end
-                elseif IsActive then
-                    RowStroke.Color = Library.Scheme.AccentColor
-                    StateBadge.BackgroundColor3 = Library.Scheme.AccentColor
-                    StateBadge.BorderColor3 = Library.Scheme.AccentColor
-                    Row.BackgroundColor3 = Library:GetBetterColor(Library.Scheme.MainColor, 1)
-
-                    Library.Registry[RowStroke].Color = "AccentColor"
-                    Library.Registry[StateBadge].BackgroundColor3 = "AccentColor"
-                    Library.Registry[StateBadge].BorderColor3 = "AccentColor"
-                    Library.Registry[Row].BackgroundColor3 = function()
-                        return Library:GetBetterColor(Library.Scheme.MainColor, 1)
-                    end
-                else
-                    RowStroke.Color = Library.Scheme.OutlineColor
-                    StateBadge.BackgroundColor3 = Library.Scheme.BackgroundColor
-                    StateBadge.BorderColor3 = Library.Scheme.OutlineColor
-                    Row.BackgroundColor3 = Library.Scheme.MainColor
-
-                    Library.Registry[RowStroke].Color = "OutlineColor"
-                    Library.Registry[StateBadge].BackgroundColor3 = "BackgroundColor"
-                    Library.Registry[StateBadge].BorderColor3 = "OutlineColor"
-                    Library.Registry[Row].BackgroundColor3 = "MainColor"
-                end
-
-                ActionLabel.TextTransparency = IsUnbound and 0.6 or (IsActive and 0 or 0.35)
-                ModeLabel.TextTransparency = IsUnbound and 0.7 or (IsActive and 0.35 or 0.6)
+                Label.TextTransparency = State and 0 or 0.5
+                CheckImage.ImageTransparency = State and 0 or 1
             end
 
             function KeybindsToggle:SetText(Text)
-                ActionLabel.Text = Text
-            end
-
-            function KeybindsToggle:SetKey(Text)
-                SetKeycapText(Text)
-            end
-
-            function KeybindsToggle:SetMode(Mode)
-                ModeLabel.Text = Mode and tostring(Mode):upper() or ""
+                Label.Text = Text
             end
 
             function KeybindsToggle:SetVisibility(Visibility)
@@ -2603,8 +2221,9 @@ do
             function KeybindsToggle:SetNormal(Normal)
                 KeybindsToggle.Normal = Normal
 
-                Holder.Active = (not Normal) and KeyPicker.Mode == "Toggle"
-                StateBadge.Visible = not Normal
+                Holder.Active = not Normal
+                Label.Position = Normal and UDim2.fromOffset(0, 0) or UDim2.fromOffset(22, 0)
+                Checkbox.Visible = not Normal
             end
 
             KeyPicker.DoClick = function(...) end --// make luau lsp shut up
@@ -2618,14 +2237,8 @@ do
             end)
 
             KeybindsToggle.Holder = Holder
-            KeybindsToggle.Row = Row
-            KeybindsToggle.RowStroke = RowStroke
-            KeybindsToggle.Keycap = Keycap
-            KeybindsToggle.KeyLabel = KeyLabel
-            KeybindsToggle.ActionLabel = ActionLabel
-            KeybindsToggle.ModeLabel = ModeLabel
-            KeybindsToggle.StateBadge = StateBadge
-            KeybindsToggle.KeycapStroke = KeycapStroke
+            KeybindsToggle.Label = Label
+            KeybindsToggle.Checkbox = Checkbox
             KeybindsToggle.Loaded = true
             table.insert(Library.KeybindToggles, KeybindsToggle)
         end
@@ -2636,7 +2249,7 @@ do
         KeyPicker.Menu = MenuTable
 
         local ModeButtons = {}
-        for _, Mode in Info.Modes do
+        for _, Mode in ipairs(Info.Modes) do
             local ModeButton = {}
 
             local Button = New("TextButton", {
@@ -2650,7 +2263,7 @@ do
             })
 
             function ModeButton:Select()
-                for _, Button in ModeButtons do
+                for _, Button in pairs(ModeButtons) do
                     Button:Deselect()
                 end
 
@@ -2660,9 +2273,6 @@ do
                 Button.TextTransparency = 0
 
                 MenuTable:Close()
-                if KeyPicker.Update then
-                    KeyPicker:Update()
-                end
             end
 
             function ModeButton:Deselect()
@@ -2688,7 +2298,14 @@ do
                 return
             end
 
-            SetPickerText(PickerText or KeyPicker.DisplayValue)
+            local X, Y = Library:GetTextBounds(
+                PickerText or KeyPicker.DisplayValue,
+                Picker.FontFace,
+                Picker.TextSize,
+                ToggleLabel.AbsoluteSize.X
+            )
+            Picker.Text = PickerText or KeyPicker.DisplayValue
+            Picker.Size = UDim2.fromOffset((X + 9), (Y + 4))
         end
 
         function KeyPicker:Update()
@@ -2704,7 +2321,7 @@ do
             end
 
             local State = KeyPicker:GetState()
-            local ShowToggle = ShouldShowKeybindToggle()
+            local ShowToggle = Library.ShowToggleFrameInKeybinds and KeyPicker.Mode == "Toggle"
 
             if KeyPicker.SyncToggleState and ParentObj.Value ~= State then
                 ParentObj:SetValue(State)
@@ -2717,9 +2334,7 @@ do
                     KeybindsToggle:SetNormal(true)
                 end
 
-                KeybindsToggle:SetText(KeyPicker.Text)
-                KeybindsToggle:SetKey(KeyPicker.DisplayValue)
-                KeybindsToggle:SetMode(KeyPicker.Mode)
+                KeybindsToggle:SetText(("[%s] %s (%s)"):format(KeyPicker.DisplayValue, KeyPicker.Text, KeyPicker.Mode))
                 KeybindsToggle:SetVisibility(true)
                 KeybindsToggle:Display(State)
             end
@@ -2731,22 +2346,6 @@ do
             elseif KeyPicker.Mode == "Hold" then
                 local Key = KeyPicker.Value
                 if Key == "None" then
-                    return false
-                end
-
-                if not AreModifiersHeld(KeyPicker.Modifiers) then
-                    return false
-                end
-
-                if SpecialKeys[Key] ~= nil then
-                    return UserInputService:IsMouseButtonPressed(SpecialKeys[Key])
-                        and not UserInputService:GetFocusedTextBox()
-                else
-                    return UserInputService:IsKeyDown(Enum.KeyCode[Key]) and not UserInputService:GetFocusedTextBox()
-                end
-            elseif KeyPicker.Mode == "Press" and IsButton then
-                local Key = KeyPicker.Value
-                if Key == "None" or Key == "Unknown" then
                     return false
                 end
 
@@ -2774,10 +2373,6 @@ do
         end
 
         function KeyPicker:DoClick()
-            if IsButton and ParentObj.Disabled then
-                return
-            end
-
             if KeyPicker.Mode == "Press" then
                 if KeyPicker.Toggled and Info.WaitForCallback == true then
                     return
@@ -2820,7 +2415,9 @@ do
 
             KeyPicker.Modifiers =
                 VerifyModifiers(if typeof(Modifiers) == "table" then Modifiers else KeyPicker.Modifiers)
-            KeyPicker.DisplayValue = BuildDisplayValue(KeyPicker.Value, KeyPicker.Modifiers)
+            KeyPicker.DisplayValue = if GetTableSize(KeyPicker.Modifiers) > 0
+                then (table.concat(KeyPicker.Modifiers, " + ") .. " + " .. KeyPicker.Value)
+                else KeyPicker.Value
 
             if ModeButtons[Mode] then
                 ModeButtons[Mode]:Select()
@@ -2834,7 +2431,6 @@ do
         end
 
         function KeyPicker:SetText(Text)
-            KeyPicker.Text = Text
             KeybindsToggle:SetText(Text)
             KeyPicker:Update()
         end
@@ -2846,7 +2442,8 @@ do
 
             Picking = true
 
-            KeyPicker:Display("...")
+            Picker.Text = "..."
+            Picker.Size = UDim2.fromOffset(29, 18)
 
             -- Wait for an non modifier key --
             local Input
@@ -2861,7 +2458,8 @@ do
                 task.wait()
 
                 -- Wait for any input --
-                KeyPicker:Display("...")
+                Picker.Text = "..."
+                Picker.Size = UDim2.fromOffset(29, 18)
 
                 if GetInput() then
                     Picking = false
@@ -2887,7 +2485,7 @@ do
                                 -- Add modifier to the key list --
                                 if not table.find(ActiveModifiers, ModifiersInput[Input.KeyCode]) then
                                     ActiveModifiers[#ActiveModifiers + 1] = ModifiersInput[Input.KeyCode]
-                                    KeyPicker:Display(BuildDisplayValue("...", ActiveModifiers))
+                                    KeyPicker:Display(table.concat(ActiveModifiers, " + ") .. " + ...")
                                 end
 
                                 -- Wait for another input --
@@ -3243,9 +2841,6 @@ do
 
             ColorPicker.SetValueRGB = function(...) end --// make luau lsp shut up
             CreateButton("Paste color", function()
-                if not Library.CopiedColor then
-                    return
-                end
                 ColorPicker:SetValueRGB(Library.CopiedColor[1], Library.CopiedColor[2])
             end)
 
@@ -3666,7 +3261,6 @@ do
             Risky = Info.Risky,
             Disabled = Info.Disabled,
             Visible = Info.Visible,
-            Addons = {},
 
             Tween = nil,
             Type = "Button",
@@ -3684,57 +3278,6 @@ do
             Padding = UDim.new(0, 9),
             Parent = Holder,
         })
-
-        local function SetConfirmState(Target, Confirming)
-            if Confirming then
-                Target.Base.Text = "Are you sure?"
-                Target.Base.TextColor3 = Library.Scheme.AccentColor
-                Library.Registry[Target.Base].TextColor3 = "AccentColor"
-            else
-                Target.Base.Text = Target.Text
-                Target.Base.TextColor3 = Target.Risky and Library.Scheme.RedColor or Library.Scheme.FontColor
-                Library.Registry[Target.Base].TextColor3 = Target.Risky and "RedColor" or "FontColor"
-            end
-        end
-
-        local function AttachPress(Target)
-            Target.Confirming = false
-            Target.ConfirmTask = nil
-
-            function Target:Press()
-                if Target.Disabled then
-                    return
-                end
-
-                if Target.DoubleClick then
-                    if Target.Confirming then
-                        Target.Confirming = false
-                        if Target.ConfirmTask then
-                            task.cancel(Target.ConfirmTask)
-                            Target.ConfirmTask = nil
-                        end
-                        SetConfirmState(Target, false)
-                        Library:SafeCallback(Target.Func)
-                        return
-                    end
-
-                    Target.Confirming = true
-                    SetConfirmState(Target, true)
-                    Target.ConfirmTask = task.delay(0.5, function()
-                        if Library.Unloaded then
-                            return
-                        end
-
-                        Target.Confirming = false
-                        Target.ConfirmTask = nil
-                        SetConfirmState(Target, false)
-                    end)
-                    return
-                end
-
-                Library:SafeCallback(Target.Func)
-            end
-        end
 
         local function CreateButton(Button)
             local Base = New("TextButton", {
@@ -3780,14 +3323,37 @@ do
             end)
 
             Button.Base.MouseButton1Click:Connect(function()
-                Button:Press()
+                if Button.Disabled or Button.Locked then
+                    return
+                end
+
+                if Button.DoubleClick then
+                    Button.Locked = true
+
+                    Button.Base.Text = "Are you sure?"
+                    Button.Base.TextColor3 = Library.Scheme.AccentColor
+                    Library.Registry[Button.Base].TextColor3 = "AccentColor"
+
+                    local Clicked = WaitForEvent(Button.Base.MouseButton1Click, 0.5)
+
+                    Button.Base.Text = Button.Text
+                    Button.Base.TextColor3 = Button.Risky and Library.Scheme.RedColor or Library.Scheme.FontColor
+                    Library.Registry[Button.Base].TextColor3 = Button.Risky and "RedColor" or "FontColor"
+
+                    if Clicked then
+                        Library:SafeCallback(Button.Func)
+                    end
+
+                    RunService.RenderStepped:Wait() --// Mouse Button fires without waiting (i hate roblox)
+                    Button.Locked = false
+                    return
+                end
+
+                Library:SafeCallback(Button.Func)
             end)
         end
 
         Button.Base, Button.Stroke = CreateButton(Button)
-        Button.TextLabel = Button.Base
-        Button.AddKeyPicker = BaseAddons.__index.AddKeyPicker
-        AttachPress(Button)
         InitEvents(Button)
 
         function Button:AddButton(...)
@@ -3812,9 +3378,6 @@ do
 
             Button.SubButton = SubButton
             SubButton.Base, SubButton.Stroke = CreateButton(SubButton)
-            SubButton.TextLabel = SubButton.Base
-            SubButton.AddKeyPicker = BaseAddons.__index.AddKeyPicker
-            AttachPress(SubButton)
             InitEvents(SubButton)
 
             function SubButton:UpdateColors()
@@ -3838,15 +3401,6 @@ do
 
                 if SubButton.TooltipTable then
                     SubButton.TooltipTable.Disabled = SubButton.Disabled
-                end
-
-                if SubButton.Confirming then
-                    SubButton.Confirming = false
-                    if SubButton.ConfirmTask then
-                        task.cancel(SubButton.ConfirmTask)
-                        SubButton.ConfirmTask = nil
-                    end
-                    SetConfirmState(SubButton, false)
                 end
 
                 SubButton.Base.Active = not SubButton.Disabled
@@ -3907,15 +3461,6 @@ do
 
             if Button.TooltipTable then
                 Button.TooltipTable.Disabled = Button.Disabled
-            end
-
-            if Button.Confirming then
-                Button.Confirming = false
-                if Button.ConfirmTask then
-                    task.cancel(Button.ConfirmTask)
-                    Button.ConfirmTask = nil
-                end
-                SetConfirmState(Button, false)
             end
 
             Button.Base.Active = not Button.Disabled
@@ -4082,7 +3627,7 @@ do
             Toggle.Value = Value
             Toggle:Display()
 
-            for _, Addon in Toggle.Addons do
+            for _, Addon in ipairs(Toggle.Addons) do
                 if Addon.Type == "KeyPicker" and Addon.SyncToggleState then
                     Addon.Toggled = Toggle.Value
                     Addon:Update()
@@ -4101,7 +3646,7 @@ do
                 Toggle.TooltipTable.Disabled = Toggle.Disabled
             end
 
-            for _, Addon in Toggle.Addons do
+            for _, Addon in ipairs(Toggle.Addons) do
                 if Addon.Type == "KeyPicker" and Addon.SyncToggleState then
                     Addon:Update()
                 end
@@ -4304,7 +3849,7 @@ do
             Toggle.Value = Value
             Toggle:Display()
 
-            for _, Addon in Toggle.Addons do
+            for _, Addon in ipairs(Toggle.Addons) do
                 if Addon.Type == "KeyPicker" and Addon.SyncToggleState then
                     Addon.Toggled = Toggle.Value
                     Addon:Update()
@@ -4323,7 +3868,7 @@ do
                 Toggle.TooltipTable.Disabled = Toggle.Disabled
             end
 
-            for _, Addon in Toggle.Addons do
+            for _, Addon in ipairs(Toggle.Addons) do
                 if Addon.Type == "KeyPicker" and Addon.SyncToggleState then
                     Addon:Update()
                 end
@@ -4464,7 +4009,6 @@ do
         end
 
         function Input:SetValue(Text)
-            Text = Text == nil and "" or tostring(Text)
             if not Input.AllowEmpty and Trim(Text) == "" then
                 Text = Input.EmptyReset
             end
@@ -4758,7 +4302,7 @@ do
                 return
             end
 
-            for _, Side in Library.ActiveTab.Sides do
+            for _, Side in ipairs(Library.ActiveTab.Sides) do
                 Side.ScrollingEnabled = false
             end
 
@@ -4778,7 +4322,7 @@ do
                 RunService.RenderStepped:Wait()
             end
 
-            for _, Side in Library.ActiveTab.Sides do
+            for _, Side in ipairs(Library.ActiveTab.Sides) do
                 Side.ScrollingEnabled = true
             end
         end)
@@ -4953,7 +4497,7 @@ do
             local Str = ""
 
             if Info.Multi then
-                for _, Value in Dropdown.Values do
+                for _, Value in ipairs(Dropdown.Values) do
                     if Dropdown.Value[Value] then
                         Str = Str
                             .. (Info.FormatDisplayValue and tostring(Info.FormatDisplayValue(Value)) or tostring(Value))
@@ -4984,7 +4528,7 @@ do
             if Info.Multi then
                 local Table = {}
 
-                for Value, _ in Dropdown.Value do
+                for Value, _ in pairs(Dropdown.Value) do
                     table.insert(Table, Value)
                 end
 
@@ -4999,13 +4543,13 @@ do
             local Values = Dropdown.Values
             local DisabledValues = Dropdown.DisabledValues
 
-            for Button, _ in Buttons do
+            for Button, _ in pairs(Buttons) do
                 Button:Destroy()
             end
             table.clear(Buttons)
 
             local Count = 0
-            for _, Value in Values do
+            for _, Value in ipairs(Values) do
                 if SearchBox and not tostring(Value):lower():match(SearchBox.Text:lower()) then
                     continue
                 end
@@ -5061,7 +4605,7 @@ do
                                 Dropdown.Value = Selected and Value or nil
                             end
 
-                            for _, OtherButton in Buttons do
+                            for _, OtherButton in pairs(Buttons) do
                                 OtherButton:UpdateButton()
                             end
                         end
@@ -5088,7 +4632,7 @@ do
             if Info.Multi then
                 local Table = {}
 
-                for Val, Active in Value or {} do
+                for Val, Active in pairs(Value or {}) do
                     if typeof(Active) ~= "boolean" then
                         Table[Active] = true
                     elseif Active and table.find(Dropdown.Values, Val) then
@@ -5106,7 +4650,7 @@ do
             end
 
             Dropdown:Display()
-            for _, Button in Buttons do
+            for _, Button in pairs(Buttons) do
                 Button:UpdateButton()
             end
 
@@ -5124,7 +4668,7 @@ do
 
         function Dropdown:AddValues(Values)
             if typeof(Values) == "table" then
-                for _, val in Values do
+                for _, val in ipairs(Values) do
                     table.insert(Dropdown.Values, val)
                 end
             elseif typeof(Values) == "string" then
@@ -5143,7 +4687,7 @@ do
 
         function Dropdown:AddDisabledValues(DisabledValues)
             if typeof(DisabledValues) == "table" then
-                for _, val in DisabledValues do
+                for _, val in ipairs(DisabledValues) do
                     table.insert(Dropdown.DisabledValues, val)
                 end
             elseif typeof(DisabledValues) == "string" then
@@ -5342,7 +4886,7 @@ do
                 return
             end
 
-            for _, Side in Groupbox.Tab.Sides do
+            for _, Side in ipairs(Groupbox.Tab.Sides) do
                 Side.ScrollingEnabled = false
             end
         end)
@@ -5352,7 +4896,7 @@ do
                 return
             end
 
-            for _, Side in Groupbox.Tab.Sides do
+            for _, Side in ipairs(Groupbox.Tab.Sides) do
                 Side.ScrollingEnabled = true
             end
         end)
@@ -5891,7 +5435,7 @@ do
         end
 
         function Depbox:Update(CancelSearch)
-            for _, Dependency in Depbox.Dependencies do
+            for _, Dependency in ipairs(Depbox.Dependencies) do
                 local Element = Dependency[1]
                 local Value = Dependency[2]
 
@@ -5936,7 +5480,7 @@ do
         end)
 
         function Depbox:SetupDependencies(Dependencies)
-            for _, Dependency in Dependencies do
+            for _, Dependency in ipairs(Dependencies) do
                 assert(typeof(Dependency) == "table", "Dependency should be a table.")
                 assert(Dependency[1] ~= nil, "Dependency is missing element.")
                 assert(Dependency[2] ~= nil, "Dependency is missing expected value.")
@@ -6010,7 +5554,7 @@ do
         end
 
         function DepGroupbox:Update(CancelSearch)
-            for _, Dependency in DepGroupbox.Dependencies do
+            for _, Dependency in ipairs(DepGroupbox.Dependencies) do
                 local Element = Dependency[1]
                 local Value = Dependency[2]
 
@@ -6045,7 +5589,7 @@ do
         end
 
         function DepGroupbox:SetupDependencies(Dependencies)
-            for _, Dependency in Dependencies do
+            for _, Dependency in ipairs(Dependencies) do
                 assert(typeof(Dependency) == "table", "Dependency should be a table.")
                 assert(Dependency[1] ~= nil, "Dependency is missing element.")
                 assert(Dependency[2] ~= nil, "Dependency is missing expected value.")
@@ -6323,10 +5867,10 @@ end
 
 function Library:CreateWindow(WindowInfo)
     WindowInfo = Library:Validate(WindowInfo, Templates.Window)
-    local ViewportSize: Vector2 = GetViewportSize()
+    local ViewportSize: Vector2 = workspace.CurrentCamera.ViewportSize
     if RunService:IsStudio() and ViewportSize.X <= 5 and ViewportSize.Y <= 5 then
         repeat
-            ViewportSize = GetViewportSize()
+            ViewportSize = workspace.CurrentCamera.ViewportSize
             task.wait()
         until ViewportSize.X > 5 and ViewportSize.Y > 5
     end
@@ -6670,7 +6214,7 @@ function Library:CreateWindow(WindowInfo)
             })
 
             Library:MakeResizable(MainFrame, ResizeButton, function()
-                for _, Tab in Library.Tabs do
+                for _, Tab in pairs(Library.Tabs) do
                     Tab:Resize(true)
                 end
             end)
@@ -6742,7 +6286,7 @@ function Library:CreateWindow(WindowInfo)
             WindowIcon.Visible = IsCompact
         end
 
-        for _, Button in Library.TabButtons do
+        for _, Button in ipairs(Library.TabButtons) do
             if not Button.Icon then
                 continue
             end
@@ -7128,7 +6672,7 @@ function Library:CreateWindow(WindowInfo)
 
         function Tab:RefreshSides()
             local Offset = WarningBoxHolder.Visible and WarningBox.Size.Y.Offset + 8 or 0
-            for _, Side in Tab.Sides do
+            for _, Side in ipairs(Tab.Sides) do
                 Side.Position = UDim2.new(Side.Position.X.Scale, 0, 0, Offset)
                 Side.Size = UDim2.new(0.5, -3, 1, -Offset)
             end
@@ -7793,7 +7337,7 @@ function Library:CreateWindow(WindowInfo)
         elseif not Library.Toggled then
             TooltipLabel.Visible = false
 
-            for _, Option in Library.Options do
+            for _, Option in pairs(Library.Options) do
                 if Option.Type == "ColorPicker" then
                     Option.ColorMenu:Close()
                     Option.ContextMenu:Close()
@@ -7958,7 +7502,7 @@ local function OnPlayerChange()
     end
 
     local PlayerList, ExcludedPlayerList = GetPlayers(), GetPlayers(true)
-    for _, Dropdown in Options do
+    for _, Dropdown in pairs(Options) do
         if Dropdown.Type == "Dropdown" and Dropdown.SpecialType == "Player" then
             Dropdown:SetValues(Dropdown.ExcludeLocalPlayer and ExcludedPlayerList or PlayerList)
         end
@@ -7971,7 +7515,7 @@ local function OnTeamChange()
     end
 
     local TeamList = GetTeams()
-    for _, Dropdown in Options do
+    for _, Dropdown in pairs(Options) do
         if Dropdown.Type == "Dropdown" and Dropdown.SpecialType == "Team" then
             Dropdown:SetValues(TeamList)
         end
