@@ -537,6 +537,9 @@ end
 local function Trim(Text: string)
     return Text:match("^%s*(.-)%s*$")
 end
+local function EscapePattern(Text: string)
+    return (Text:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1"))
+end
 local function Round(Value, Rounding)
     assert(Rounding >= 0, "Invalid rounding number.")
 
@@ -847,6 +850,7 @@ local function ResetTab(Tab)
 end
 
 function Library:UpdateSearch(SearchText)
+    SearchText = tostring(SearchText or "")
     Library.SearchText = SearchText
 
     local TabsToReset = {}
@@ -877,6 +881,7 @@ function Library:UpdateSearch(SearchText)
         return
     end
 
+    Search = EscapePattern(Search)
     Library.Searching = true
 
     local TabsToSearch = {}
@@ -969,9 +974,9 @@ function Library:SetDPIScale(DPIScale: number)
     end
 end
 
-function Library:GiveSignal(Connection: RBXScriptConnection | RBXScriptSignal)
+function Library:GiveSignal(Connection: RBXScriptConnection)
     local ConnectionType = typeof(Connection)
-    if Connection and (ConnectionType == "RBXScriptConnection" or ConnectionType == "RBXScriptSignal") then
+    if Connection and ConnectionType == "RBXScriptConnection" then
         table.insert(Library.Signals, Connection)
     end
 
@@ -1908,9 +1913,9 @@ function Library:AddTooltip(InfoStr: string, DisabledInfoStr: string, HoverInsta
         CurrentHoverInstance = nil
     end
 
-    local function GiveSignal(Connection: RBXScriptConnection | RBXScriptSignal)
+    local function GiveSignal(Connection: RBXScriptConnection)
         local ConnectionType = typeof(Connection)
-        if Connection and (ConnectionType == "RBXScriptConnection" or ConnectionType == "RBXScriptSignal") then
+        if Connection and ConnectionType == "RBXScriptConnection" then
             table.insert(TooltipTable.Signals, Connection)
         end
 
@@ -1931,7 +1936,7 @@ function Library:AddTooltip(InfoStr: string, DisabledInfoStr: string, HoverInsta
     function TooltipTable:Destroy()
         for Index = #TooltipTable.Signals, 1, -1 do
             local Connection = table.remove(TooltipTable.Signals, Index)
-            if Connection and Connection.Connected then
+            if typeof(Connection) == "RBXScriptConnection" and Connection.Connected then
                 Connection:Disconnect()
             end
         end
@@ -1956,7 +1961,7 @@ end
 function Library:Unload()
     for Index = #Library.Signals, 1, -1 do
         local Connection = table.remove(Library.Signals, Index)
-        if Connection and Connection.Connected then
+        if typeof(Connection) == "RBXScriptConnection" and Connection.Connected then
             Connection:Disconnect()
         end
     end
@@ -2861,6 +2866,9 @@ do
 
             ColorPicker.SetValueRGB = function(...) end --// make luau lsp shut up
             CreateButton("Paste color", function()
+                if typeof(Library.CopiedColor) ~= "table" or typeof(Library.CopiedColor[1]) ~= "Color3" then
+                    return
+                end
                 ColorPicker:SetValueRGB(Library.CopiedColor[1], Library.CopiedColor[2])
             end)
 
@@ -3022,7 +3030,16 @@ do
 
             local R, G, B = RgbBox.Text:match("(%d+),%s*(%d+),%s*(%d+)")
             if R and G and B then
-                ColorPicker:SetHSVFromRGB(Color3.fromRGB(R, G, B))
+                local Rn = tonumber(R)
+                local Gn = tonumber(G)
+                local Bn = tonumber(B)
+                if Rn and Gn and Bn then
+                    ColorPicker:SetHSVFromRGB(Color3.fromRGB(
+                        math.clamp(Rn, 0, 255),
+                        math.clamp(Gn, 0, 255),
+                        math.clamp(Bn, 0, 255)
+                    ))
+                end
             end
 
             ColorPicker:Update()
@@ -4562,6 +4579,7 @@ do
         function Dropdown:BuildDropdownList()
             local Values = Dropdown.Values
             local DisabledValues = Dropdown.DisabledValues
+            local Search = SearchBox and EscapePattern(SearchBox.Text:lower()) or nil
 
             for Button, _ in pairs(Buttons) do
                 Button:Destroy()
@@ -4570,7 +4588,7 @@ do
 
             local Count = 0
             for _, Value in ipairs(Values) do
-                if SearchBox and not tostring(Value):lower():match(SearchBox.Text:lower()) then
+                if SearchBox and Search ~= "" and not tostring(Value):lower():match(Search) then
                     continue
                 end
 
