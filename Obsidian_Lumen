@@ -217,18 +217,6 @@ local Library = {
 
     ConfigFolder = "Obsidian/configs",
     ConfigExtension = ".json",
-
-    UserSettings = {
-        Enabled = true,
-        AutoLoad = true,
-        AutoSave = true,
-        ConfigFolder = "Obsidian/user_settings",
-        ConfigExtension = ".json",
-        ConfigName = nil,
-        Options = {},
-        Applying = false,
-        PendingKeybind = nil,
-    },
 }
 
 if RunService:IsStudio() then
@@ -313,8 +301,6 @@ local Templates = {
         MobileButtonsSide = "Left",
         UnlockMouseWhileOpen = true,
 
-        UserSettings = true,
-
         EnableSidebarResize = false,
         EnableCompacting = true,
         DisableCompactingSnap = false,
@@ -328,6 +314,17 @@ local Templates = {
 
         --// Dragging \\--
         CompactWidthActivation = 128,
+
+        --// User Info \\--
+        User = {
+            Enabled = true,
+            Anonymous = false,
+            AnonymousText = "Anonymous",
+            Name = "",
+            DisplayName = "",
+            Image = "",
+            Callback = nil,
+        },
     },
     Toggle = {
         Text = "Toggle",
@@ -738,24 +735,6 @@ local function SerializeOption(Option)
     return nil
 end
 
-local function SerializeKeybind(Value)
-    if typeof(Value) == "EnumItem" and Value.EnumType == Enum.KeyCode then
-        return {
-            Type = "KeyCode",
-            Value = Value.Name,
-        }
-    elseif typeof(Value) == "table" and Value.Type == "KeyPicker" then
-        return {
-            Type = "KeyPicker",
-            Value = Value.Value,
-            Mode = Value.Mode,
-            Modifiers = table.clone(Value.Modifiers or {}),
-        }
-    end
-
-    return nil
-end
-
 local function MapDropdownValue(Option, Saved)
     if Saved == nil then
         return nil
@@ -1053,252 +1032,6 @@ function Library:ListConfigs()
 
     table.sort(Names)
     return Names, nil
-end
-
---// User Settings \\--
-function Library:GetUserIdentity()
-    local DisplayName = LocalPlayer.Name
-    pcall(function()
-        if typeof(LocalPlayer.DisplayName) == "string" and LocalPlayer.DisplayName ~= "" then
-            DisplayName = LocalPlayer.DisplayName
-        end
-    end)
-
-    return {
-        Name = LocalPlayer.Name,
-        DisplayName = DisplayName,
-        UserId = LocalPlayer.UserId,
-    }
-end
-
-function Library:GetUserSettingsName()
-    local Name = Library.UserSettings.ConfigName or tostring(LocalPlayer.UserId)
-    Name = NormalizeConfigName(Name) or tostring(LocalPlayer.UserId)
-    return Name
-end
-
-function Library:GetUserSettingsPath()
-    local Extension = Library.UserSettings.ConfigExtension or Library.ConfigExtension
-    return string.format("%s/%s%s", Library.UserSettings.ConfigFolder, Library:GetUserSettingsName(), Extension)
-end
-
-function Library:AutoSaveUserSettings()
-    if Library.UserSettings.AutoSave and not Library.UserSettings.Applying then
-        Library:SaveUserSettings()
-    end
-end
-
-function Library:UpdateKeybindToggles()
-    for _, Option in pairs(Options) do
-        if Option.Type == "KeyPicker" then
-            Option:Update()
-        end
-    end
-end
-
-local function ApplyToggleKeybindSetting(Data)
-    if typeof(Data) ~= "table" then
-        return
-    end
-
-    local KeyPicker = Library.UserSettings.Options.ToggleKeybind
-    local Key = Data.Value or Data.Key or "None"
-    local Mode = Data.Mode
-    local Modifiers = typeof(Data.Modifiers) == "table" and Data.Modifiers or {}
-
-    if KeyPicker then
-        local UseMode = Mode or KeyPicker.Mode
-        if Data.Type == "KeyCode" then
-            UseMode = KeyPicker.Mode
-            Modifiers = {}
-        end
-
-        KeyPicker:SetValue({ Key, UseMode, Modifiers })
-        Library.ToggleKeybind = KeyPicker
-        Library.UserSettings.PendingKeybind = nil
-        return
-    end
-
-    if Data.Type == "KeyCode" then
-        local Code = Enum.KeyCode[Key]
-        if Code then
-            Library.ToggleKeybind = Code
-        end
-        Library.UserSettings.PendingKeybind = nil
-    elseif Data.Type == "KeyPicker" then
-        Library.UserSettings.PendingKeybind = {
-            Value = Key,
-            Mode = Mode,
-            Modifiers = table.clone(Modifiers),
-        }
-    end
-end
-
-function Library:GetUserSettingsConfig()
-    local Identity = Library:GetUserIdentity()
-
-    return {
-        Version = 1,
-        UserId = Identity.UserId,
-        Name = Identity.Name,
-        DisplayName = Identity.DisplayName,
-        Settings = {
-            NotifySide = Library.NotifySide,
-            ShowCustomCursor = Library.ShowCustomCursor,
-            NotifyOnError = Library.NotifyOnError,
-            ShowToggleFrameInKeybinds = Library.ShowToggleFrameInKeybinds,
-            ForceCheckbox = Library.ForceCheckbox,
-            DPIScale = math.floor((Library.DPIScale * 100) + 0.5),
-            ToggleKeybind = SerializeKeybind(Library.ToggleKeybind),
-        },
-    }
-end
-
-function Library:ApplyUserSettingsConfig(Config, ApplyToOptions: boolean?)
-    if typeof(Config) ~= "table" then
-        return false, "invalid config"
-    end
-
-    local Settings = Config.Settings or Config
-    if typeof(Settings) ~= "table" then
-        return false, "invalid config"
-    end
-
-    Library.UserSettings.Applying = true
-    local UserOptions = Library.UserSettings.Options or {}
-
-    if typeof(Settings.NotifySide) == "string" then
-        if ApplyToOptions and UserOptions.NotifySide then
-            UserOptions.NotifySide:SetValue(Settings.NotifySide)
-        else
-            Library:SetNotifySide(Settings.NotifySide)
-        end
-    end
-
-    if typeof(Settings.ShowCustomCursor) == "boolean" then
-        if ApplyToOptions and UserOptions.ShowCustomCursor then
-            UserOptions.ShowCustomCursor:SetValue(Settings.ShowCustomCursor)
-        else
-            Library.ShowCustomCursor = Settings.ShowCustomCursor
-        end
-    end
-
-    if typeof(Settings.NotifyOnError) == "boolean" then
-        if ApplyToOptions and UserOptions.NotifyOnError then
-            UserOptions.NotifyOnError:SetValue(Settings.NotifyOnError)
-        else
-            Library.NotifyOnError = Settings.NotifyOnError
-        end
-    end
-
-    if typeof(Settings.ShowToggleFrameInKeybinds) == "boolean" then
-        if ApplyToOptions and UserOptions.ShowToggleFrameInKeybinds then
-            UserOptions.ShowToggleFrameInKeybinds:SetValue(Settings.ShowToggleFrameInKeybinds)
-        else
-            Library.ShowToggleFrameInKeybinds = Settings.ShowToggleFrameInKeybinds
-            Library:UpdateKeybindToggles()
-        end
-    end
-
-    if typeof(Settings.ForceCheckbox) == "boolean" then
-        if ApplyToOptions and UserOptions.ForceCheckbox then
-            UserOptions.ForceCheckbox:SetValue(Settings.ForceCheckbox)
-        else
-            Library.ForceCheckbox = Settings.ForceCheckbox
-        end
-    end
-
-    if typeof(Settings.DPIScale) == "number" then
-        local Scale = math.clamp(Settings.DPIScale, 50, 150)
-        if ApplyToOptions and UserOptions.DPIScale then
-            UserOptions.DPIScale:SetValue(Scale)
-        else
-            Library:SetDPIScale(Scale)
-        end
-    end
-
-    if typeof(Settings.ToggleKeybind) == "table" then
-        ApplyToggleKeybindSetting(Settings.ToggleKeybind)
-    end
-
-    Library.UserSettings.Applying = false
-    return true, nil
-end
-
-function Library:SaveUserSettings()
-    if not (writefile and HttpService) then
-        return false, "missing writefile"
-    end
-
-    local ok, err = EnsureFolder(Library.UserSettings.ConfigFolder)
-    if not ok then
-        return false, err
-    end
-
-    local Config = Library:GetUserSettingsConfig()
-    local Encoded
-    local Success, EncodeError = pcall(function()
-        Encoded = HttpService:JSONEncode(Config)
-    end)
-    if not Success then
-        return false, EncodeError
-    end
-
-    writefile(Library:GetUserSettingsPath(), Encoded)
-    return true, nil
-end
-
-function Library:LoadUserSettings(ApplyToOptions: boolean?)
-    if not (readfile and isfile and HttpService) then
-        return false, "missing readfile"
-    end
-
-    local Path = Library:GetUserSettingsPath()
-    if not isfile(Path) then
-        return false, "config not found"
-    end
-
-    local Raw = readfile(Path)
-    local Config
-    local Success, DecodeError = pcall(function()
-        Config = HttpService:JSONDecode(Raw)
-    end)
-    if not Success then
-        return false, DecodeError
-    end
-
-    return Library:ApplyUserSettingsConfig(Config, ApplyToOptions)
-end
-
-function Library:DeleteUserSettings()
-    if not (delfile and isfile) then
-        return false, "missing delfile"
-    end
-
-    local Path = Library:GetUserSettingsPath()
-    if not isfile(Path) then
-        return false, "config not found"
-    end
-
-    delfile(Path)
-    return true, nil
-end
-
-function Library:ResetUserSettings()
-    local Defaults = {
-        NotifySide = "Right",
-        ShowCustomCursor = true,
-        NotifyOnError = false,
-        ShowToggleFrameInKeybinds = true,
-        ForceCheckbox = false,
-        DPIScale = 100,
-        ToggleKeybind = {
-            Type = "KeyCode",
-            Value = Enum.KeyCode.RightControl.Name,
-        },
-    }
-
-    return Library:ApplyUserSettingsConfig({ Settings = Defaults }, true)
 end
 
 function Library:UpdateDependencyBoxes()
@@ -7090,10 +6823,40 @@ function Library:CreateWindow(WindowInfo)
     local ResizeButton
     local Tabs
     local Container
+    local UserButton
+    local UserAvatarHolder
+    local UserAvatarImage
+    local UserNameLabel
+    local UserStatusDot
+    local UserArrow
 
     local InitialLeftWidth = math.ceil(WindowInfo.Size.X.Offset * 0.3)
     local IsCompact = WindowInfo.SidebarCompacted
     local LastExpandedWidth = InitialLeftWidth
+    local SidebarWidth = InitialLeftWidth
+
+    local BottomBarHeight = 20
+    local UserInfoHeight = 46
+    local UserInfoGap = 6
+    local UserAvatarSize = 28
+    local UserArrowSize = 18
+    local UserStatusDotSize = 8
+    local UserPaddingX = 10
+    local UserNameGap = 8
+    local UserStatusDotGap = 8
+
+    local UserInfoEnabled = WindowInfo.User.Enabled ~= false
+    local UserAnonymous = WindowInfo.User.Anonymous == true
+    local UserCallback = WindowInfo.User.Callback
+
+    local TabsBottomOffsetWithUser = BottomBarHeight + UserInfoHeight + UserInfoGap
+    local TabsBottomOffsetNoUser = BottomBarHeight
+    local TabsBottomOffset = UserInfoEnabled and TabsBottomOffsetWithUser or TabsBottomOffsetNoUser
+
+    local UserAvatarExpandedPos = UDim2.new(0, UserPaddingX, 0.5, 0)
+    local UserAvatarCompactPos = UDim2.new(0.5, -UserAvatarSize / 2, 0.5, 0)
+    local UserNameLeftOffset = UserPaddingX + UserAvatarSize + UserNameGap
+    local UserNameRightOffset = UserPaddingX + UserArrowSize + UserStatusDotGap + UserStatusDotSize
 
     do
         Library.KeybindFrame, Library.KeybindContainer = Library:AddDraggableMenu("Keybinds")
@@ -7404,7 +7167,7 @@ function Library:CreateWindow(WindowInfo)
             CanvasSize = UDim2.fromScale(0, 0),
             Position = UDim2.fromOffset(0, 49),
             ScrollBarThickness = 0,
-            Size = UDim2.new(0, InitialLeftWidth, 1, -70),
+            Size = UDim2.new(0, InitialLeftWidth, 1, -TabsBottomOffset),
             Parent = MainFrame,
         })
         New("UIListLayout", {
@@ -7419,7 +7182,7 @@ function Library:CreateWindow(WindowInfo)
             end,
             Name = "Container",
             Position = UDim2.new(1, 0, 0, 49),
-            Size = UDim2.new(1, -InitialLeftWidth - 1, 1, -70),
+            Size = UDim2.new(1, -InitialLeftWidth - 1, 1, -TabsBottomOffset),
             Parent = MainFrame,
         })
         New("UIPadding", {
@@ -7429,6 +7192,83 @@ function Library:CreateWindow(WindowInfo)
             PaddingTop = UDim.new(0, 0),
             Parent = Container,
         })
+
+        --// User Info \\--
+        do
+            UserButton = New("TextButton", {
+                BackgroundColor3 = "MainColor",
+                Name = "User",
+                Position = UDim2.new(0, 0, 1, -(BottomBarHeight + UserInfoHeight)),
+                Size = UDim2.new(0, InitialLeftWidth, 0, UserInfoHeight),
+                Text = "",
+                Visible = UserInfoEnabled,
+                Parent = MainFrame,
+            })
+
+            UserAvatarHolder = New("Frame", {
+                BackgroundColor3 = "OutlineColor",
+                ClipsDescendants = true,
+                Size = UDim2.fromOffset(UserAvatarSize, UserAvatarSize),
+                AnchorPoint = Vector2.new(0, 0.5),
+                Position = UserAvatarExpandedPos,
+                Parent = UserButton,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(1, 0),
+                Parent = UserAvatarHolder,
+            })
+
+            UserAvatarImage = New("ImageLabel", {
+                Image = "",
+                Size = UDim2.fromScale(1, 1),
+                ScaleType = Enum.ScaleType.Crop,
+                Parent = UserAvatarHolder,
+            })
+
+            UserNameLabel = New("TextLabel", {
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0, UserNameLeftOffset, 0, 0),
+                Size = UDim2.new(1, -(UserNameLeftOffset + UserNameRightOffset), 1, 0),
+                Text = "",
+                TextSize = 16,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = UserButton,
+            })
+
+            UserStatusDot = New("Frame", {
+                AnchorPoint = Vector2.new(1, 0.5),
+                BackgroundColor3 = "OutlineColor",
+                Position = UDim2.new(1, -(UserPaddingX + UserArrowSize + UserStatusDotGap), 0.5, 0),
+                Size = UDim2.fromOffset(UserStatusDotSize, UserStatusDotSize),
+                Parent = UserButton,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(1, 0),
+                Parent = UserStatusDot,
+            })
+
+            local ArrowIcon = Library:GetIcon("chevron-right")
+            local ArrowRotation = 0
+            if not ArrowIcon then
+                ArrowIcon = Library:GetIcon("chevron-up")
+                ArrowRotation = 90
+            end
+            if ArrowIcon then
+                UserArrow = New("ImageLabel", {
+                    AnchorPoint = Vector2.new(1, 0.5),
+                    Image = ArrowIcon.Url,
+                    ImageColor3 = "FontColor",
+                    ImageRectOffset = ArrowIcon.ImageRectOffset,
+                    ImageRectSize = ArrowIcon.ImageRectSize,
+                    ImageTransparency = 0.4,
+                    Position = UDim2.new(1, -UserPaddingX, 0.5, 0),
+                    Rotation = ArrowRotation,
+                    Size = UDim2.fromOffset(UserArrowSize, UserArrowSize),
+                    Parent = UserButton,
+                })
+            end
+        end
     end
 
     --// Window Table \\--
@@ -7439,6 +7279,115 @@ function Library:CreateWindow(WindowInfo)
 
         WindowTitle.Text = title
         WindowInfo.Title = title
+    end
+
+    local function ApplySidebarLayout()
+        DividerLine.Position = UDim2.fromOffset(SidebarWidth, 0)
+
+        TitleHolder.Size = UDim2.new(0, SidebarWidth, 1, 0)
+        RightWrapper.Size = UDim2.new(1, -SidebarWidth - 57 - 1, 1, -16)
+        Tabs.Size = UDim2.new(0, SidebarWidth, 1, -TabsBottomOffset)
+        Container.Size = UDim2.new(1, -SidebarWidth - 1, 1, -TabsBottomOffset)
+
+        if UserButton then
+            UserButton.Size = UDim2.new(0, SidebarWidth, 0, UserInfoHeight)
+        end
+    end
+
+    local function UpdateUserCompact()
+        if not UserButton then
+            return
+        end
+
+        UserButton.Visible = UserInfoEnabled
+        if UserAvatarHolder then
+            UserAvatarHolder.Position = IsCompact and UserAvatarCompactPos or UserAvatarExpandedPos
+        end
+        if UserNameLabel then
+            UserNameLabel.Visible = UserInfoEnabled and not IsCompact
+        end
+        if UserArrow then
+            UserArrow.Visible = UserInfoEnabled and not IsCompact
+        end
+        if UserStatusDot then
+            UserStatusDot.Visible = UserInfoEnabled and not IsCompact and not UserAnonymous
+        end
+    end
+
+    local function UpdateUserVisuals()
+        if not UserNameLabel or not UserAvatarImage then
+            return
+        end
+
+        local DisplayName = WindowInfo.User.AnonymousText
+        if UserAnonymous then
+            if DisplayName == "" then
+                DisplayName = "Anonymous"
+            end
+        else
+            if WindowInfo.User.DisplayName ~= "" then
+                DisplayName = WindowInfo.User.DisplayName
+            elseif WindowInfo.User.Name ~= "" then
+                DisplayName = WindowInfo.User.Name
+            else
+                local Player = Library.LocalPlayer
+                DisplayName = (Player.DisplayName and Player.DisplayName ~= "" and Player.DisplayName) or Player.Name
+            end
+        end
+
+        UserNameLabel.Text = DisplayName
+
+        local iconData = nil
+        local isIcon = false
+
+        if UserAnonymous then
+            iconData = Library:GetIcon("user")
+            isIcon = iconData ~= nil
+        else
+            if WindowInfo.User.Image ~= "" then
+                if typeof(WindowInfo.User.Image) == "number" then
+                    iconData = {
+                        Url = string.format("rbxassetid://%d", WindowInfo.User.Image),
+                        ImageRectOffset = Vector2.zero,
+                        ImageRectSize = Vector2.zero,
+                    }
+                elseif typeof(WindowInfo.User.Image) == "string" then
+                    iconData = Library:GetCustomIcon(WindowInfo.User.Image)
+                    if iconData ~= nil then
+                        isIcon = not IsValidCustomIcon(WindowInfo.User.Image)
+                    end
+                end
+            end
+        end
+
+        if iconData then
+            UserAvatarImage.Image = iconData.Url
+            UserAvatarImage.ImageRectOffset = iconData.ImageRectOffset or Vector2.zero
+            UserAvatarImage.ImageRectSize = iconData.ImageRectSize or Vector2.zero
+            UserAvatarImage.ImageColor3 = isIcon and "FontColor" or "WhiteColor"
+            UserAvatarImage.ImageTransparency = isIcon and 0.15 or 0
+            UserAvatarImage.ScaleType = isIcon and Enum.ScaleType.Fit or Enum.ScaleType.Crop
+        else
+            local Success, Thumbnail = pcall(
+                Players.GetUserThumbnailAsync,
+                Players,
+                Library.LocalPlayer.UserId,
+                Enum.ThumbnailType.HeadShot,
+                Enum.ThumbnailSize.Size48x48
+            )
+            if Success and Thumbnail then
+                UserAvatarImage.Image = Thumbnail
+                UserAvatarImage.ImageRectOffset = Vector2.zero
+                UserAvatarImage.ImageRectSize = Vector2.zero
+                UserAvatarImage.ImageColor3 = "WhiteColor"
+                UserAvatarImage.ImageTransparency = 0
+                UserAvatarImage.ScaleType = Enum.ScaleType.Crop
+            else
+                UserAvatarImage.Image = ""
+            end
+        end
+
+        UpdateUserCompact()
     end
 
     local function ApplyCompact()
@@ -7464,6 +7413,8 @@ function Library:CreateWindow(WindowInfo)
             Button.Padding.PaddingTop = UDim.new(0, IsCompact and 6 or 11)
             Button.Icon.SizeConstraint = IsCompact and Enum.SizeConstraint.RelativeXY or Enum.SizeConstraint.RelativeYY
         end
+
+        UpdateUserCompact()
     end
 
     function Window:IsSidebarCompacted()
@@ -7475,18 +7426,14 @@ function Library:CreateWindow(WindowInfo)
     end
 
     function Window:GetSidebarWidth()
-        return Tabs.Size.X.Offset
+        return SidebarWidth
     end
 
     function Window:SetSidebarWidth(Width)
         Width = math.clamp(Width, 48, MainFrame.Size.X.Offset - WindowInfo.MinContainerWidth - 1)
+        SidebarWidth = Width
 
-        DividerLine.Position = UDim2.fromOffset(Width, 0)
-
-        TitleHolder.Size = UDim2.new(0, Width, 1, 0)
-        RightWrapper.Size = UDim2.new(1, -Width - 57 - 1, 1, -16)
-        Tabs.Size = UDim2.new(0, Width, 1, -70)
-        Container.Size = UDim2.new(1, -Width - 1, 1, -70)
+        ApplySidebarLayout()
 
         if WindowInfo.EnableCompacting then
             ApplyCompact()
@@ -7495,6 +7442,64 @@ function Library:CreateWindow(WindowInfo)
             LastExpandedWidth = Width
         end
     end
+
+    Window.User = {}
+
+    function Window.User:Enable()
+        if UserInfoEnabled then
+            return
+        end
+
+        UserInfoEnabled = true
+        WindowInfo.User.Enabled = true
+        TabsBottomOffset = TabsBottomOffsetWithUser
+
+        if UserButton then
+            UserButton.Visible = true
+        end
+
+        ApplySidebarLayout()
+        UpdateUserCompact()
+    end
+
+    function Window.User:Disable()
+        if not UserInfoEnabled then
+            return
+        end
+
+        UserInfoEnabled = false
+        WindowInfo.User.Enabled = false
+        TabsBottomOffset = TabsBottomOffsetNoUser
+
+        if UserButton then
+            UserButton.Visible = false
+        end
+
+        ApplySidebarLayout()
+    end
+
+    function Window.User:SetAnonymous(State)
+        UserAnonymous = State and true or false
+        WindowInfo.User.Anonymous = UserAnonymous
+        UpdateUserVisuals()
+    end
+
+    function Window.User:SetCallback(Callback)
+        if Callback ~= nil then
+            assert(typeof(Callback) == "function", "Callback must be a function")
+        end
+
+        UserCallback = Callback
+        WindowInfo.User.Callback = Callback
+    end
+
+    if UserButton then
+        Library:GiveSignal(UserButton.MouseButton1Click:Connect(function()
+            Library:SafeCallback(UserCallback, Window.User)
+        end))
+    end
+
+    UpdateUserVisuals()
 
     function Window:ShowTabInfo(Name, Description)
         CurrentTabLabel.Text = Name
@@ -8470,227 +8475,6 @@ function Library:CreateWindow(WindowInfo)
         return Tab
     end
 
-    function Window:AddUserSettings(UserInfo)
-        if Library.UserSettings.Enabled ~= true or UserInfo == false then
-            return
-        end
-
-        local Info = typeof(UserInfo) == "table" and table.clone(UserInfo) or {}
-        local Defaults = {
-            Name = "User",
-            Icon = "user",
-            Description = "Account UI settings",
-        }
-
-        for Key, Value in pairs(Defaults) do
-            if Info[Key] == nil then
-                Info[Key] = Value
-            end
-        end
-
-        if typeof(Info.AutoLoad) == "boolean" then
-            Library.UserSettings.AutoLoad = Info.AutoLoad
-        end
-        if typeof(Info.AutoSave) == "boolean" then
-            Library.UserSettings.AutoSave = Info.AutoSave
-        end
-        if typeof(Info.ConfigName) == "string" then
-            Library.UserSettings.ConfigName = Info.ConfigName
-        end
-        if typeof(Info.ConfigFolder) == "string" then
-            Library.UserSettings.ConfigFolder = Info.ConfigFolder
-        end
-
-        local BaseName = Info.Name or "User"
-        local TabName = BaseName
-        local Index = 2
-        while Library.Tabs[TabName] do
-            TabName = string.format("%s %d", BaseName, Index)
-            Index += 1
-        end
-
-        local Tab = Window:AddTab({
-            Name = TabName,
-            Icon = Info.Icon,
-            Description = Info.Description,
-        })
-
-        local IdentityBox = Tab:AddLeftGroupbox("Identity", "user")
-        local Identity = Library:GetUserIdentity()
-        IdentityBox:AddLabel(string.format("Display Name: %s", Identity.DisplayName))
-        if Identity.DisplayName ~= Identity.Name then
-            IdentityBox:AddLabel(string.format("Username: %s", Identity.Name))
-        end
-        IdentityBox:AddLabel(string.format("UserId: %s", tostring(Identity.UserId)))
-
-        if setclipboard then
-            IdentityBox:AddButton({
-                Text = "Copy UserId",
-                Func = function()
-                    setclipboard(tostring(Identity.UserId))
-                end,
-            })
-        end
-
-        local StorageBox = Tab:AddLeftGroupbox("Account", "save")
-        StorageBox:AddLabel(string.format("Config: %s", Library:GetUserSettingsName()))
-
-        local CanSave = writefile and HttpService
-        local CanLoad = readfile and isfile and HttpService
-        local CanDelete = delfile and isfile
-
-        StorageBox:AddButton({
-            Text = "Save Settings",
-            Disabled = not CanSave,
-            DisabledTooltip = "Missing writefile",
-            Func = function()
-                Library:SaveUserSettings()
-            end,
-        })
-        StorageBox:AddButton({
-            Text = "Load Settings",
-            Disabled = not CanLoad,
-            DisabledTooltip = "Missing readfile",
-            Func = function()
-                Library:LoadUserSettings(true)
-            end,
-        })
-        StorageBox:AddButton({
-            Text = "Reset Settings",
-            Func = function()
-                Library:ResetUserSettings()
-                Library:AutoSaveUserSettings()
-            end,
-        })
-        StorageBox:AddButton({
-            Text = "Delete Settings",
-            DoubleClick = true,
-            Disabled = not CanDelete,
-            DisabledTooltip = "Missing delfile",
-            Func = function()
-                Library:DeleteUserSettings()
-            end,
-        })
-
-        local SettingsBox = Tab:AddRightGroupbox("Interface", "settings")
-        local function AutoSave()
-            Library:AutoSaveUserSettings()
-        end
-
-        local ShowCursorToggle = SettingsBox:AddToggle("UserSettings_ShowCustomCursor", {
-            Text = "Custom Cursor",
-            Default = Library.ShowCustomCursor,
-            Callback = function(Value)
-                Library.ShowCustomCursor = Value
-                AutoSave()
-            end,
-        })
-
-        local NotifySideDropdown = SettingsBox:AddDropdown("UserSettings_NotifySide", {
-            Text = "Notifications Side",
-            Values = { "Left", "Right" },
-            Default = Library.NotifySide,
-            Callback = function(Value)
-                if typeof(Value) == "string" then
-                    Library:SetNotifySide(Value)
-                end
-                AutoSave()
-            end,
-        })
-
-        local NotifyOnErrorToggle = SettingsBox:AddToggle("UserSettings_NotifyOnError", {
-            Text = "Notify On Error",
-            Default = Library.NotifyOnError,
-            Callback = function(Value)
-                Library.NotifyOnError = Value
-                AutoSave()
-            end,
-        })
-
-        local ShowKeybindFrameToggle = SettingsBox:AddToggle("UserSettings_ShowToggleFrameInKeybinds", {
-            Text = "Keybind Toggle Frame",
-            Default = Library.ShowToggleFrameInKeybinds,
-            Callback = function(Value)
-                Library.ShowToggleFrameInKeybinds = Value
-                Library:UpdateKeybindToggles()
-                AutoSave()
-            end,
-        })
-
-        local ForceCheckboxToggle = SettingsBox:AddToggle("UserSettings_ForceCheckbox", {
-            Text = "Force Checkboxes",
-            Default = Library.ForceCheckbox,
-            Tooltip = "Applies to new toggles only.",
-            Callback = function(Value)
-                Library.ForceCheckbox = Value
-                AutoSave()
-            end,
-        })
-
-        local DPIScaleSlider = SettingsBox:AddSlider("UserSettings_DPIScale", {
-            Text = "UI Scale",
-            Min = 50,
-            Max = 150,
-            Rounding = 0,
-            Suffix = "%",
-            Default = math.floor((Library.DPIScale * 100) + 0.5),
-            Callback = function(Value)
-                Library:SetDPIScale(Value)
-                AutoSave()
-            end,
-        })
-
-        local DefaultKey = "RightControl"
-        local DefaultModifiers = {}
-        if typeof(Library.ToggleKeybind) == "EnumItem" and Library.ToggleKeybind.EnumType == Enum.KeyCode then
-            DefaultKey = Library.ToggleKeybind.Name
-        elseif typeof(Library.ToggleKeybind) == "table" and Library.ToggleKeybind.Type == "KeyPicker" then
-            DefaultKey = Library.ToggleKeybind.Value or DefaultKey
-            DefaultModifiers = table.clone(Library.ToggleKeybind.Modifiers or {})
-        end
-
-        local KeybindLabel = SettingsBox:AddLabel("Menu Toggle Key")
-        KeybindLabel:AddKeyPicker("UserSettings_ToggleKeybind", {
-            Text = "Menu Toggle",
-            Default = DefaultKey,
-            DefaultModifiers = DefaultModifiers,
-            ChangedCallback = function()
-                Library.ToggleKeybind = Options["UserSettings_ToggleKeybind"]
-                AutoSave()
-            end,
-        })
-
-        local ToggleKeybindPicker = Options["UserSettings_ToggleKeybind"]
-        if ToggleKeybindPicker then
-            Library.ToggleKeybind = ToggleKeybindPicker
-        end
-
-        if Library.UserSettings.PendingKeybind and ToggleKeybindPicker then
-            local Pending = Library.UserSettings.PendingKeybind
-            ToggleKeybindPicker:SetValue({
-                Pending.Value or "None",
-                Pending.Mode or ToggleKeybindPicker.Mode,
-                Pending.Modifiers or {},
-            })
-            Library.ToggleKeybind = ToggleKeybindPicker
-            Library.UserSettings.PendingKeybind = nil
-        end
-
-        Library.UserSettings.Options.ShowCustomCursor = ShowCursorToggle
-        Library.UserSettings.Options.NotifySide = NotifySideDropdown
-        Library.UserSettings.Options.NotifyOnError = NotifyOnErrorToggle
-        Library.UserSettings.Options.ShowToggleFrameInKeybinds = ShowKeybindFrameToggle
-        Library.UserSettings.Options.ForceCheckbox = ForceCheckboxToggle
-        Library.UserSettings.Options.DPIScale = DPIScaleSlider
-        Library.UserSettings.Options.ToggleKeybind = ToggleKeybindPicker
-
-        if Library.UserSettings.AutoLoad then
-            Library:LoadUserSettings(true)
-        end
-
-        return Tab
-    end
-
     function Library:Toggle(Value: boolean?)
         if typeof(Value) == "boolean" then
             Library.Toggled = Value
@@ -8822,9 +8606,6 @@ function Library:CreateWindow(WindowInfo)
     end
     if WindowInfo.EnableCompacting and WindowInfo.SidebarCompacted then
         Window:SetSidebarWidth(WindowInfo.SidebarCompactWidth)
-    end
-    if WindowInfo.UserSettings ~= false and Library.UserSettings.Enabled == true then
-        Window:AddUserSettings(WindowInfo.UserSettings)
     end
     if WindowInfo.AutoShow then
         task.spawn(Library.Toggle)
