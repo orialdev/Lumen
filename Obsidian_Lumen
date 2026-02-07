@@ -2660,7 +2660,9 @@ do
                 Button.TextTransparency = 0
 
                 MenuTable:Close()
-                KeyPicker:Update()
+                if KeyPicker.Update then
+                    KeyPicker:Update()
+                end
             end
 
             function ModeButton:Deselect()
