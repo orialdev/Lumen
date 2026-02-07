@@ -469,37 +469,30 @@ end
 --// Basic Functions \\--
 local function WaitForEvent(Event, Timeout, Condition)
     local Bindable = Instance.new("BindableEvent")
-    local Done = false
+    local Completed = false
     local Connection
     Connection = Event:Once(function(...)
-        if Done then
+        if Completed then
             return
         end
+        Completed = true
 
-        local Passed = not Condition or typeof(Condition) == "function" and Condition(...)
-        Done = true
-        Bindable:Fire(Passed and true or false)
+        local Passed = (not Condition) or (typeof(Condition) == "function" and Condition(...))
+        Bindable:Fire(Passed)
+    end)
+    task.delay(Timeout, function()
+        if Completed then
+            return
+        end
+        Completed = true
+
+        if Connection and Connection.Connected then
+            Connection:Disconnect()
+        end
+        Bindable:Fire(false)
     end)
 
-    local TimeoutThread
-    if typeof(Timeout) == "number" and Timeout >= 0 then
-        TimeoutThread = task.delay(Timeout, function()
-            if Done then
-                return
-            end
-
-            Done = true
-            if Connection and Connection.Connected then
-                Connection:Disconnect()
-            end
-            Bindable:Fire(false)
-        end)
-    end
-
     local Result = Bindable.Event:Wait()
-    if TimeoutThread and task.cancel then
-        task.cancel(TimeoutThread)
-    end
     Bindable:Destroy()
 
     return Result
@@ -548,7 +541,7 @@ local function Round(Value, Rounding)
     assert(Rounding >= 0, "Invalid rounding number.")
 
     if Rounding == 0 then
-        return math.round(Value)
+        return math.floor(Value)
     end
 
     return tonumber(string.format("%." .. Rounding .. "f", Value))
@@ -971,7 +964,7 @@ function Library:SetDPIScale(DPIScale: number)
         end
     end
 
-    for _, Notification in pairs(Library.Notifications) do
+    for _, Notification in ipairs(Library.Notifications) do
         Notification:Resize()
     end
 end
@@ -1016,9 +1009,6 @@ function Library:GetIcon(IconName: string)
 
     local Success, Icon = pcall(Icons.GetAsset, IconName)
     if not Success then
-        Success, Icon = pcall(Icons.GetAsset, Icons, IconName)
-    end
-    if not Success then
         return
     end
     return Icon
@@ -1037,21 +1027,9 @@ function Library:GetCustomIcon(IconName: string)
     end
 end
 
-local function DeepCopyTable(Source: { [any]: any }): { [any]: any }
-    local Copy = {}
-    for k, v in pairs(Source) do
-        if typeof(v) == "table" then
-            Copy[k] = DeepCopyTable(v)
-        else
-            Copy[k] = v
-        end
-    end
-    return Copy
-end
-
 function Library:Validate(Table: { [string]: any }, Template: { [string]: any }): { [string]: any }
     if typeof(Table) ~= "table" then
-        return DeepCopyTable(Template)
+        return Template
     end
 
     for k, v in pairs(Template) do
@@ -1295,7 +1273,11 @@ function Library:GetTextBounds(Text: string, Font: Font, Size: number, Width: nu
     Params.RichText = true
     Params.Font = Font
     Params.Size = Size
-    Params.Width = Width or workspace.CurrentCamera.ViewportSize.X - 32
+    if Width == nil then
+        local Camera = workspace.CurrentCamera
+        Width = Camera and (Camera.ViewportSize.X - 32) or 1000
+    end
+    Params.Width = math.max(Width, 1)
 
     local Bounds = TextService:GetTextBoundsAsync(Params)
     return Bounds.X, Bounds.Y
@@ -1872,14 +1854,19 @@ TooltipLabel:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
         return
     end
 
+    local Camera = workspace.CurrentCamera
+    if not Camera then
+        return
+    end
+
     local X, _ = Library:GetTextBounds(
         TooltipLabel.Text,
         TooltipLabel.FontFace,
         TooltipLabel.TextSize,
-        (workspace.CurrentCamera.ViewportSize.X - TooltipLabel.AbsolutePosition.X - 8) / Library.DPIScale
+        (Camera.ViewportSize.X - TooltipLabel.AbsolutePosition.X - 8) / Library.DPIScale
     )
 
-    TooltipLabel.Size = UDim2.fromOffset(X + 8)
+    TooltipLabel.Size = UDim2.fromOffset(X + 8, 0)
 end)
 
 local CurrentHoverInstance
@@ -1958,7 +1945,7 @@ function Library:AddTooltip(InfoStr: string, DisabledInfoStr: string, HoverInsta
         end
     end
 
-    table.insert(Tooltips, TooltipLabel)
+    table.insert(Tooltips, TooltipTable)
     return TooltipTable
 end
 
