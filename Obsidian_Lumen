@@ -2077,6 +2077,17 @@ do
         end
 
         local Picking = false
+        local KEYCAP_HEIGHT = 20
+        local KEYCAP_MIN_WIDTH = 28
+        local KEYCAP_MAX_WIDTH = 160
+        local KEYCAP_PADDING_X = 6
+        local KEYCAP_TEXT_SIZE = 12
+
+        local KEYBIND_ROW_HEIGHT = 26
+        local KEYBIND_BADGE_HEIGHT = 16
+        local KEYBIND_BADGE_MIN_WIDTH = 34
+        local KEYBIND_BADGE_MAX_WIDTH = 96
+        local KEYBIND_BADGE_PADDING_X = 6
 
         -- Special Keys
         local SpecialKeys = {
@@ -2119,6 +2130,109 @@ do
             [Enum.KeyCode.Tab] = "Tab",
             [Enum.KeyCode.CapsLock] = "CapsLock",
         }
+
+        local KeyLabelAliases = {
+            LeftControl = "LCtrl",
+            RightControl = "RCtrl",
+            LeftShift = "LShift",
+            RightShift = "RShift",
+            LeftAlt = "LAlt",
+            RightAlt = "RAlt",
+            LeftSuper = "LWin",
+            RightSuper = "RWin",
+            LeftMeta = "LWin",
+            RightMeta = "RWin",
+
+            PageUp = "PgUp",
+            PageDown = "PgDn",
+            Backspace = "Bksp",
+            Return = "Enter",
+            Escape = "Esc",
+            CapsLock = "Caps",
+            Insert = "Ins",
+            Delete = "Del",
+            Print = "PrtScr",
+            PrintScreen = "PrtScr",
+            ScrollLock = "ScrLk",
+            NumLock = "Num",
+
+            LeftBracket = "[",
+            RightBracket = "]",
+            BackSlash = "\\",
+            Slash = "/",
+            Semicolon = ";",
+            Quote = "'",
+            Comma = ",",
+            Period = ".",
+            Minus = "-",
+            Equals = "=",
+            Grave = "`",
+            Backquote = "`",
+
+            KeypadOne = "Num1",
+            KeypadTwo = "Num2",
+            KeypadThree = "Num3",
+            KeypadFour = "Num4",
+            KeypadFive = "Num5",
+            KeypadSix = "Num6",
+            KeypadSeven = "Num7",
+            KeypadEight = "Num8",
+            KeypadNine = "Num9",
+            KeypadZero = "Num0",
+            KeypadDivide = "Num/",
+            KeypadMultiply = "Num*",
+            KeypadMinus = "Num-",
+            KeypadPlus = "Num+",
+            KeypadEnter = "NumEnt",
+            KeypadDecimal = "Num.",
+        }
+
+        local function FormatKeyLabel(Key)
+            if typeof(Key) ~= "string" then
+                return ""
+            end
+
+            local Alias = KeyLabelAliases[Key]
+            return (Alias or Key):upper()
+        end
+
+        local function BuildDisplayValue(Key, CurrentModifiers)
+            if Key == "None" then
+                return "NONE"
+            end
+            if Key == "Unknown" then
+                return "UNKNOWN"
+            end
+
+            local Parts = {}
+            if typeof(CurrentModifiers) == "table" then
+                for _, Modifier in CurrentModifiers do
+                    Parts[#Parts + 1] = FormatKeyLabel(Modifier)
+                end
+            end
+
+            if Key then
+                Parts[#Parts + 1] = FormatKeyLabel(Key)
+            end
+
+            if #Parts == 0 then
+                return "NONE"
+            end
+
+            return table.concat(Parts, "+")
+        end
+
+        local function GetKeycapWidth(Text, FontFace, TextSize)
+            local X = Library:GetTextBounds(Text, FontFace, TextSize)
+            local Width = math.floor(X + KEYCAP_PADDING_X * 2)
+            return math.clamp(Width, KEYCAP_MIN_WIDTH, KEYCAP_MAX_WIDTH)
+        end
+
+        local function GetBadgeWidth(Text, FontFace, TextSize)
+            local X = Library:GetTextBounds(Text, FontFace, TextSize)
+            local Width = math.floor(X + KEYBIND_BADGE_PADDING_X * 2)
+            return math.clamp(Width, KEYBIND_BADGE_MIN_WIDTH, KEYBIND_BADGE_MAX_WIDTH)
+        end
 
         local IsModifierInput = function(Input)
             return Input.UserInputType == Enum.UserInputType.Keyboard and ModifiersInput[Input.KeyCode] ~= nil
@@ -2205,76 +2319,245 @@ do
         end
 
         KeyPicker.Modifiers = VerifyModifiers(KeyPicker.Modifiers) -- Verify default modifiers
+        KeyPicker.DisplayValue = BuildDisplayValue(KeyPicker.Value, KeyPicker.Modifiers)
 
         local Picker = New("TextButton", {
-            BackgroundColor3 = "MainColor",
+            BackgroundColor3 = "BackgroundColor",
             BorderColor3 = "OutlineColor",
             BorderSizePixel = 1,
-            Size = UDim2.fromOffset(18, 18),
-            Text = KeyPicker.Value,
-            TextSize = 14,
+            Size = UDim2.fromOffset(KEYCAP_MIN_WIDTH, KEYCAP_HEIGHT),
+            Text = "",
+            TextSize = KEYCAP_TEXT_SIZE,
+            TextTruncate = Enum.TextTruncate.AtEnd,
             Parent = ToggleLabel,
         })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, math.max(2, math.floor(Library.CornerRadius / 2))),
+            Parent = Picker,
+        })
+        New("UIPadding", {
+            PaddingLeft = UDim.new(0, KEYCAP_PADDING_X),
+            PaddingRight = UDim.new(0, KEYCAP_PADDING_X),
+            Parent = Picker,
+        })
+
+        local function SetPickerText(Text)
+            local Width = GetKeycapWidth(Text, Picker.FontFace, Picker.TextSize)
+            Picker.Text = Text
+            Picker.Size = UDim2.fromOffset(Width, KEYCAP_HEIGHT)
+        end
 
         local function ShouldShowKeybindToggle()
-            return Library.ShowToggleFrameInKeybinds and (KeyPicker.Mode == "Toggle" or IsButton)
+            return Library.ShowToggleFrameInKeybinds
         end
 
         local KeybindsToggle = { Normal = not ShouldShowKeybindToggle() }
         do
             local Holder = New("TextButton", {
                 BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 16),
+                Size = UDim2.new(1, 0, 0, KEYBIND_ROW_HEIGHT),
                 Text = "",
                 Visible = not Info.NoUI,
                 Parent = Library.KeybindContainer,
             })
 
-            local Label = New("TextLabel", {
-                AutomaticSize = Enum.AutomaticSize.X,
-                BackgroundTransparency = 1,
-                Size = UDim2.fromScale(0, 1),
-                Text = "",
-                TextSize = 14,
-                TextTransparency = 0.5,
-                Parent = Holder,
-            })
-
-            local Checkbox = New("Frame", {
-                AnchorPoint = Vector2.new(0, 0.5),
+            local Row = New("Frame", {
                 BackgroundColor3 = "MainColor",
-                Position = UDim2.fromScale(0, 0.5),
-                Size = UDim2.fromOffset(14, 14),
-                SizeConstraint = Enum.SizeConstraint.RelativeYY,
+                Size = UDim2.fromScale(1, 1),
                 Parent = Holder,
             })
             New("UICorner", {
-                CornerRadius = UDim.new(0, Library.CornerRadius / 2),
-                Parent = Checkbox,
+                CornerRadius = UDim.new(0, Library.CornerRadius),
+                Parent = Row,
             })
-            New("UIStroke", {
+            local RowStroke = New("UIStroke", {
                 Color = "OutlineColor",
-                Parent = Checkbox,
+                Parent = Row,
+            })
+            New("UIPadding", {
+                PaddingBottom = UDim.new(0, 3),
+                PaddingLeft = UDim.new(0, 8),
+                PaddingRight = UDim.new(0, 8),
+                PaddingTop = UDim.new(0, 3),
+                Parent = Row,
+            })
+            New("UIListLayout", {
+                FillDirection = Enum.FillDirection.Horizontal,
+                VerticalAlignment = Enum.VerticalAlignment.Center,
+                Padding = UDim.new(0, 6),
+                Parent = Row,
             })
 
-            local CheckImage = New("ImageLabel", {
-                Image = CheckIcon and CheckIcon.Url or "",
-                ImageColor3 = "FontColor",
-                ImageRectOffset = CheckIcon and CheckIcon.ImageRectOffset or Vector2.zero,
-                ImageRectSize = CheckIcon and CheckIcon.ImageRectSize or Vector2.zero,
-                ImageTransparency = 1,
-                Position = UDim2.fromOffset(2, 2),
-                Size = UDim2.new(1, -4, 1, -4),
-                Parent = Checkbox,
+            local Keycap = New("Frame", {
+                BackgroundColor3 = "BackgroundColor",
+                Size = UDim2.fromOffset(KEYCAP_MIN_WIDTH, KEYCAP_HEIGHT),
+                Parent = Row,
             })
+            New("UICorner", {
+                CornerRadius = UDim.new(0, math.max(2, math.floor(Library.CornerRadius / 2))),
+                Parent = Keycap,
+            })
+            local KeycapStroke = New("UIStroke", {
+                Color = "OutlineColor",
+                Parent = Keycap,
+            })
+            New("UIPadding", {
+                PaddingLeft = UDim.new(0, KEYCAP_PADDING_X),
+                PaddingRight = UDim.new(0, KEYCAP_PADDING_X),
+                Parent = Keycap,
+            })
+
+            local KeyLabel = New("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.fromScale(1, 1),
+                Text = "",
+                TextSize = KEYCAP_TEXT_SIZE,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                Parent = Keycap,
+            })
+
+            local TextHolder = New("Frame", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 1, 0),
+                Parent = Row,
+            })
+            New("UIFlexItem", {
+                FlexMode = Enum.UIFlexMode.Grow,
+                Parent = TextHolder,
+            })
+            New("UIListLayout", {
+                FillDirection = Enum.FillDirection.Vertical,
+                VerticalAlignment = Enum.VerticalAlignment.Center,
+                Padding = UDim.new(0, 1),
+                Parent = TextHolder,
+            })
+
+            local ActionLabel = New("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 12),
+                Text = "",
+                TextSize = 12,
+                TextTransparency = 0.35,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                Parent = TextHolder,
+            })
+
+            local ModeLabel = New("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 10),
+                Text = "",
+                TextSize = 10,
+                TextTransparency = 0.6,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                Parent = TextHolder,
+            })
+
+            local StateBadge = New("TextLabel", {
+                BackgroundColor3 = "BackgroundColor",
+                BorderColor3 = "OutlineColor",
+                BorderSizePixel = 1,
+                Size = UDim2.fromOffset(KEYBIND_BADGE_MIN_WIDTH, KEYBIND_BADGE_HEIGHT),
+                Text = "",
+                TextSize = 10,
+                TextTransparency = 0,
+                TextXAlignment = Enum.TextXAlignment.Center,
+                Parent = Row,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(0, math.max(2, math.floor(Library.CornerRadius / 2))),
+                Parent = StateBadge,
+            })
+            New("UIPadding", {
+                PaddingLeft = UDim.new(0, KEYBIND_BADGE_PADDING_X),
+                PaddingRight = UDim.new(0, KEYBIND_BADGE_PADDING_X),
+                Parent = StateBadge,
+            })
+
+            local function SetKeycapText(Text)
+                KeyLabel.Text = Text
+                Keycap.Size = UDim2.fromOffset(GetKeycapWidth(Text, KeyLabel.FontFace, KeyLabel.TextSize), KEYCAP_HEIGHT)
+            end
+
+            local function SetBadgeText(Text)
+                StateBadge.Text = Text
+                StateBadge.Size =
+                    UDim2.fromOffset(GetBadgeWidth(Text, StateBadge.FontFace, StateBadge.TextSize), KEYBIND_BADGE_HEIGHT)
+            end
 
             function KeybindsToggle:Display(State)
-                Label.TextTransparency = State and 0 or 0.5
-                CheckImage.ImageTransparency = State and 0 or 1
+                local Mode = KeyPicker.Mode or "Toggle"
+                local IsUnbound = KeyPicker.Value == "None" or KeyPicker.Value == "Unknown"
+                local IsActive = (Mode == "Always") or (not IsUnbound and State)
+
+                local BadgeText
+                if IsUnbound then
+                    BadgeText = "UNBOUND"
+                elseif Mode == "Toggle" then
+                    BadgeText = IsActive and "ON" or "OFF"
+                elseif Mode == "Hold" then
+                    BadgeText = "HOLD"
+                elseif Mode == "Press" then
+                    BadgeText = "PRESS"
+                elseif Mode == "Always" then
+                    BadgeText = "ON"
+                else
+                    BadgeText = tostring(Mode):upper()
+                end
+
+                SetBadgeText(BadgeText)
+
+                if IsUnbound then
+                    RowStroke.Color = Library.Scheme.RedColor
+                    StateBadge.BackgroundColor3 = Library.Scheme.RedColor
+                    StateBadge.BorderColor3 = Library.Scheme.RedColor
+                    Row.BackgroundColor3 = Library:GetBetterColor(Library.Scheme.MainColor, 1)
+
+                    Library.Registry[RowStroke].Color = "RedColor"
+                    Library.Registry[StateBadge].BackgroundColor3 = "RedColor"
+                    Library.Registry[StateBadge].BorderColor3 = "RedColor"
+                    Library.Registry[Row].BackgroundColor3 = function()
+                        return Library:GetBetterColor(Library.Scheme.MainColor, 1)
+                    end
+                elseif IsActive then
+                    RowStroke.Color = Library.Scheme.AccentColor
+                    StateBadge.BackgroundColor3 = Library.Scheme.AccentColor
+                    StateBadge.BorderColor3 = Library.Scheme.AccentColor
+                    Row.BackgroundColor3 = Library:GetBetterColor(Library.Scheme.MainColor, 1)
+
+                    Library.Registry[RowStroke].Color = "AccentColor"
+                    Library.Registry[StateBadge].BackgroundColor3 = "AccentColor"
+                    Library.Registry[StateBadge].BorderColor3 = "AccentColor"
+                    Library.Registry[Row].BackgroundColor3 = function()
+                        return Library:GetBetterColor(Library.Scheme.MainColor, 1)
+                    end
+                else
+                    RowStroke.Color = Library.Scheme.OutlineColor
+                    StateBadge.BackgroundColor3 = Library.Scheme.BackgroundColor
+                    StateBadge.BorderColor3 = Library.Scheme.OutlineColor
+                    Row.BackgroundColor3 = Library.Scheme.MainColor
+
+                    Library.Registry[RowStroke].Color = "OutlineColor"
+                    Library.Registry[StateBadge].BackgroundColor3 = "BackgroundColor"
+                    Library.Registry[StateBadge].BorderColor3 = "OutlineColor"
+                    Library.Registry[Row].BackgroundColor3 = "MainColor"
+                end
+
+                ActionLabel.TextTransparency = IsUnbound and 0.6 or (IsActive and 0 or 0.35)
+                ModeLabel.TextTransparency = IsUnbound and 0.7 or (IsActive and 0.35 or 0.6)
             end
 
             function KeybindsToggle:SetText(Text)
-                Label.Text = Text
+                ActionLabel.Text = Text
+            end
+
+            function KeybindsToggle:SetKey(Text)
+                SetKeycapText(Text)
+            end
+
+            function KeybindsToggle:SetMode(Mode)
+                ModeLabel.Text = Mode and tostring(Mode):upper() or ""
             end
 
             function KeybindsToggle:SetVisibility(Visibility)
@@ -2285,8 +2568,7 @@ do
                 KeybindsToggle.Normal = Normal
 
                 Holder.Active = (not Normal) and KeyPicker.Mode == "Toggle"
-                Label.Position = Normal and UDim2.fromOffset(0, 0) or UDim2.fromOffset(22, 0)
-                Checkbox.Visible = not Normal
+                StateBadge.Visible = not Normal
             end
 
             KeyPicker.DoClick = function(...) end --// make luau lsp shut up
@@ -2300,8 +2582,14 @@ do
             end)
 
             KeybindsToggle.Holder = Holder
-            KeybindsToggle.Label = Label
-            KeybindsToggle.Checkbox = Checkbox
+            KeybindsToggle.Row = Row
+            KeybindsToggle.RowStroke = RowStroke
+            KeybindsToggle.Keycap = Keycap
+            KeybindsToggle.KeyLabel = KeyLabel
+            KeybindsToggle.ActionLabel = ActionLabel
+            KeybindsToggle.ModeLabel = ModeLabel
+            KeybindsToggle.StateBadge = StateBadge
+            KeybindsToggle.KeycapStroke = KeycapStroke
             KeybindsToggle.Loaded = true
             table.insert(Library.KeybindToggles, KeybindsToggle)
         end
@@ -2336,6 +2624,7 @@ do
                 Button.TextTransparency = 0
 
                 MenuTable:Close()
+                KeyPicker:Update()
             end
 
             function ModeButton:Deselect()
@@ -2361,14 +2650,7 @@ do
                 return
             end
 
-            local X, Y = Library:GetTextBounds(
-                PickerText or KeyPicker.DisplayValue,
-                Picker.FontFace,
-                Picker.TextSize,
-                ToggleLabel.AbsoluteSize.X
-            )
-            Picker.Text = PickerText or KeyPicker.DisplayValue
-            Picker.Size = UDim2.fromOffset((X + 9), (Y + 4))
+            SetPickerText(PickerText or KeyPicker.DisplayValue)
         end
 
         function KeyPicker:Update()
@@ -2397,7 +2679,9 @@ do
                     KeybindsToggle:SetNormal(true)
                 end
 
-                KeybindsToggle:SetText(("[%s] %s (%s)"):format(KeyPicker.DisplayValue, KeyPicker.Text, KeyPicker.Mode))
+                KeybindsToggle:SetText(KeyPicker.Text)
+                KeybindsToggle:SetKey(KeyPicker.DisplayValue)
+                KeybindsToggle:SetMode(KeyPicker.Mode)
                 KeybindsToggle:SetVisibility(true)
                 KeybindsToggle:Display(State)
             end
@@ -2498,9 +2782,7 @@ do
 
             KeyPicker.Modifiers =
                 VerifyModifiers(if typeof(Modifiers) == "table" then Modifiers else KeyPicker.Modifiers)
-            KeyPicker.DisplayValue = if GetTableSize(KeyPicker.Modifiers) > 0
-                then (table.concat(KeyPicker.Modifiers, " + ") .. " + " .. KeyPicker.Value)
-                else KeyPicker.Value
+            KeyPicker.DisplayValue = BuildDisplayValue(KeyPicker.Value, KeyPicker.Modifiers)
 
             if ModeButtons[Mode] then
                 ModeButtons[Mode]:Select()
@@ -2514,6 +2796,7 @@ do
         end
 
         function KeyPicker:SetText(Text)
+            KeyPicker.Text = Text
             KeybindsToggle:SetText(Text)
             KeyPicker:Update()
         end
@@ -2525,8 +2808,7 @@ do
 
             Picking = true
 
-            Picker.Text = "..."
-            Picker.Size = UDim2.fromOffset(29, 18)
+            KeyPicker:Display("...")
 
             -- Wait for an non modifier key --
             local Input
@@ -2541,8 +2823,7 @@ do
                 task.wait()
 
                 -- Wait for any input --
-                Picker.Text = "..."
-                Picker.Size = UDim2.fromOffset(29, 18)
+                KeyPicker:Display("...")
 
                 if GetInput() then
                     Picking = false
@@ -2568,7 +2849,7 @@ do
                                 -- Add modifier to the key list --
                                 if not table.find(ActiveModifiers, ModifiersInput[Input.KeyCode]) then
                                     ActiveModifiers[#ActiveModifiers + 1] = ModifiersInput[Input.KeyCode]
-                                    KeyPicker:Display(table.concat(ActiveModifiers, " + ") .. " + ...")
+                                    KeyPicker:Display(BuildDisplayValue("...", ActiveModifiers))
                                 end
 
                                 -- Wait for another input --
