@@ -2053,6 +2053,9 @@ do
         end
 
         local ToggleLabel = ParentObj.TextLabel
+        if IsButton and ParentObj.KeybindSlot then
+            ToggleLabel = ParentObj.KeybindSlot
+        end
         assert(ToggleLabel, "KeyPicker requires a TextLabel to attach to.")
 
         local KeyPicker = {
@@ -2232,23 +2235,15 @@ do
             Parent = ToggleLabel,
         })
 
-        local KeybindPadding
-        if IsButton and ToggleLabel:IsA("TextButton") then
-            Picker.AnchorPoint = Vector2.new(1, 0.5)
-            Picker.Position = UDim2.new(1, -6, 0.5, 0)
-
-            ToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
-            ToggleLabel.TextTruncate = Enum.TextTruncate.AtEnd
-
-            if not ParentObj.KeybindPadding then
-                ParentObj.KeybindPadding = New("UIPadding", {
-                    Name = "KeybindPadding",
-                    PaddingLeft = UDim.new(0, 8),
-                    PaddingRight = UDim.new(0, 26),
-                    Parent = ToggleLabel,
-                })
+        if IsButton then
+            Picker.BackgroundTransparency = 1
+            Picker.BorderSizePixel = 0
+            Picker.Size = UDim2.fromScale(1, 1)
+            Picker.TextXAlignment = Enum.TextXAlignment.Center
+            Picker.TextYAlignment = Enum.TextYAlignment.Center
+            if ToggleLabel.ZIndex then
+                Picker.ZIndex = ToggleLabel.ZIndex + 1
             end
-            KeybindPadding = ParentObj.KeybindPadding
         end
 
         local KeybindsToggle = { Normal = KeyPicker.Mode ~= "Toggle" }
@@ -2392,17 +2387,23 @@ do
                 return
             end
 
+            local BoundsWidth = ToggleLabel.AbsoluteSize.X
+            if IsButton then
+                BoundsWidth = workspace.CurrentCamera.ViewportSize.X
+            end
             local X, Y = Library:GetTextBounds(
                 PickerText or KeyPicker.DisplayValue,
                 Picker.FontFace,
                 Picker.TextSize,
-                ToggleLabel.AbsoluteSize.X
+                BoundsWidth
             )
             Picker.Text = PickerText or KeyPicker.DisplayValue
-            Picker.Size = UDim2.fromOffset((X + 9), (Y + 4))
-
-            if IsButton and KeybindPadding then
-                KeybindPadding.PaddingRight = UDim.new(0, Picker.Size.X.Offset + 10)
+            if IsButton then
+                if ParentObj.SetKeybindWidth then
+                    ParentObj:SetKeybindWidth(X, Y)
+                end
+            else
+                Picker.Size = UDim2.fromOffset((X + 9), (Y + 4))
             end
         end
 
@@ -3379,6 +3380,12 @@ do
         })
 
         local function CreateButton(Button)
+            local Wrap = New("Frame", {
+                BackgroundTransparency = 1,
+                Size = UDim2.fromScale(1, 1),
+                Parent = Holder,
+            })
+
             local Base = New("TextButton", {
                 Active = not Button.Disabled,
                 BackgroundColor3 = Button.Disabled and "BackgroundColor" or "MainColor",
@@ -3387,7 +3394,7 @@ do
                 TextSize = 14,
                 TextTransparency = 0.4,
                 Visible = Button.Visible,
-                Parent = Holder,
+                Parent = Wrap,
             })
 
             local Stroke = New("UIStroke", {
@@ -3396,7 +3403,32 @@ do
                 Parent = Base,
             })
 
-            return Base, Stroke
+            local KeybindSlot = New("Frame", {
+                AnchorPoint = Vector2.new(1, 0.5),
+                BackgroundColor3 = "BackgroundColor",
+                Position = UDim2.new(1, 0, 0.5, 0),
+                Size = UDim2.fromOffset(0, 18),
+                Visible = false,
+                Parent = Wrap,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(0, Library.CornerRadius / 2),
+                Parent = KeybindSlot,
+            })
+            New("UIStroke", {
+                Color = "OutlineColor",
+                Transparency = 0.5,
+                Parent = KeybindSlot,
+            })
+            New("UIPadding", {
+                PaddingBottom = UDim.new(0, 2),
+                PaddingLeft = UDim.new(0, 6),
+                PaddingRight = UDim.new(0, 6),
+                PaddingTop = UDim.new(0, 2),
+                Parent = KeybindSlot,
+            })
+
+            return Base, Stroke, Wrap, KeybindSlot
         end
 
         local function TriggerButton(Button, ConfirmEvent)
@@ -3456,8 +3488,26 @@ do
             end)
         end
 
-        Button.Base, Button.Stroke = CreateButton(Button)
+        Button.Base, Button.Stroke, Button.Wrap, Button.KeybindSlot = CreateButton(Button)
         Button.TextLabel = Button.Base
+        Button.KeybindGap = 6
+        function Button:SetKeybindWidth(Width, Height)
+            if not self.KeybindSlot then
+                return
+            end
+
+            if not Width or Width <= 0 then
+                self.KeybindSlot.Visible = false
+                self.Base.Size = UDim2.fromScale(1, 1)
+                return
+            end
+
+            local SlotWidth = math.max(Width + 12, 18)
+            local SlotHeight = math.max((Height or 14) + 4, 18)
+            self.KeybindSlot.Visible = true
+            self.KeybindSlot.Size = UDim2.fromOffset(SlotWidth, SlotHeight)
+            self.Base.Size = UDim2.new(1, -(SlotWidth + self.KeybindGap), 1, 0)
+        end
         function Button:Trigger(ConfirmEvent)
             TriggerButton(self, ConfirmEvent)
         end
@@ -3491,8 +3541,26 @@ do
             }
 
             Button.SubButton = SubButton
-            SubButton.Base, SubButton.Stroke = CreateButton(SubButton)
+            SubButton.Base, SubButton.Stroke, SubButton.Wrap, SubButton.KeybindSlot = CreateButton(SubButton)
             SubButton.TextLabel = SubButton.Base
+            SubButton.KeybindGap = 6
+            function SubButton:SetKeybindWidth(Width, Height)
+                if not self.KeybindSlot then
+                    return
+                end
+
+                if not Width or Width <= 0 then
+                    self.KeybindSlot.Visible = false
+                    self.Base.Size = UDim2.fromScale(1, 1)
+                    return
+                end
+
+                local SlotWidth = math.max(Width + 12, 18)
+                local SlotHeight = math.max((Height or 14) + 4, 18)
+                self.KeybindSlot.Visible = true
+                self.KeybindSlot.Size = UDim2.fromOffset(SlotWidth, SlotHeight)
+                self.Base.Size = UDim2.new(1, -(SlotWidth + self.KeybindGap), 1, 0)
+            end
             function SubButton:Trigger(ConfirmEvent)
                 TriggerButton(self, ConfirmEvent)
             end
