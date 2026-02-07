@@ -469,19 +469,37 @@ end
 --// Basic Functions \\--
 local function WaitForEvent(Event, Timeout, Condition)
     local Bindable = Instance.new("BindableEvent")
-    local Connection = Event:Once(function(...)
-        if not Condition or typeof(Condition) == "function" and Condition(...) then
-            Bindable:Fire(true)
-        else
-            Bindable:Fire(false)
+    local Done = false
+    local Connection
+    Connection = Event:Once(function(...)
+        if Done then
+            return
         end
-    end)
-    task.delay(Timeout, function()
-        Connection:Disconnect()
-        Bindable:Fire(false)
+
+        local Passed = not Condition or typeof(Condition) == "function" and Condition(...)
+        Done = true
+        Bindable:Fire(Passed and true or false)
     end)
 
+    local TimeoutThread
+    if typeof(Timeout) == "number" and Timeout >= 0 then
+        TimeoutThread = task.delay(Timeout, function()
+            if Done then
+                return
+            end
+
+            Done = true
+            if Connection and Connection.Connected then
+                Connection:Disconnect()
+            end
+            Bindable:Fire(false)
+        end)
+    end
+
     local Result = Bindable.Event:Wait()
+    if TimeoutThread and task.cancel then
+        task.cancel(TimeoutThread)
+    end
     Bindable:Destroy()
 
     return Result
@@ -530,7 +548,7 @@ local function Round(Value, Rounding)
     assert(Rounding >= 0, "Invalid rounding number.")
 
     if Rounding == 0 then
-        return math.floor(Value)
+        return math.round(Value)
     end
 
     return tonumber(string.format("%." .. Rounding .. "f", Value))
@@ -998,6 +1016,9 @@ function Library:GetIcon(IconName: string)
 
     local Success, Icon = pcall(Icons.GetAsset, IconName)
     if not Success then
+        Success, Icon = pcall(Icons.GetAsset, Icons, IconName)
+    end
+    if not Success then
         return
     end
     return Icon
@@ -1016,9 +1037,21 @@ function Library:GetCustomIcon(IconName: string)
     end
 end
 
+local function DeepCopyTable(Source: { [any]: any }): { [any]: any }
+    local Copy = {}
+    for k, v in pairs(Source) do
+        if typeof(v) == "table" then
+            Copy[k] = DeepCopyTable(v)
+        else
+            Copy[k] = v
+        end
+    end
+    return Copy
+end
+
 function Library:Validate(Table: { [string]: any }, Template: { [string]: any }): { [string]: any }
     if typeof(Table) ~= "table" then
-        return Template
+        return DeepCopyTable(Template)
     end
 
     for k, v in pairs(Template) do
