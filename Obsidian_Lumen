@@ -7,6 +7,7 @@ local RunService: RunService = cloneref(game:GetService("RunService"))
 local SoundService: SoundService = cloneref(game:GetService("SoundService"))
 local UserInputService: UserInputService = cloneref(game:GetService("UserInputService"))
 local TextService: TextService = cloneref(game:GetService("TextService"))
+local HttpService: HttpService = cloneref(game:GetService("HttpService"))
 local Teams: Teams = cloneref(game:GetService("Teams"))
 local TweenService: TweenService = cloneref(game:GetService("TweenService"))
 
@@ -213,6 +214,9 @@ local Library = {
     Scales = {},
 
     ImageManager = CustomImageManager,
+
+    ConfigFolder = "Obsidian/configs",
+    ConfigExtension = ".json",
 }
 
 if RunService:IsStudio() then
@@ -574,6 +578,407 @@ local function GetTeams()
     end)
 
     return TeamList
+end
+
+--// Config \\--
+local function EnsureFolder(Path: string)
+    if not isfolder or not makefolder then
+        return false, "missing folder functions"
+    end
+
+    local Traversed = ""
+    local Segments = Path:split("/")
+    for _, Segment in ipairs(Segments) do
+        if Segment == "" then
+            continue
+        end
+
+        if Traversed == "" then
+            Traversed = Segment
+        else
+            Traversed = Traversed .. "/" .. Segment
+        end
+
+        if not isfolder(Traversed) then
+            makefolder(Traversed)
+        end
+    end
+
+    return true, nil
+end
+
+local function NormalizeConfigName(Name: string)
+    if typeof(Name) ~= "string" then
+        return nil
+    end
+
+    Name = Trim(Name)
+    if Name == "" then
+        return nil
+    end
+
+    Name = Name:gsub("[/\\\\]", "_")
+    if Name:sub(-#Library.ConfigExtension) == Library.ConfigExtension then
+        Name = Name:sub(1, #Name - #Library.ConfigExtension)
+    end
+
+    return Name
+end
+
+local function BuildConfigPath(Name: string)
+    return string.format("%s/%s%s", Library.ConfigFolder, Name, Library.ConfigExtension)
+end
+
+local function SerializeColor3(Color: Color3)
+    return { Color.R, Color.G, Color.B }
+end
+
+local function DeserializeColor3(Value)
+    if typeof(Value) == "string" then
+        local ok, color = pcall(Color3.fromHex, Value)
+        if ok then
+            return color
+        end
+    elseif typeof(Value) == "table" then
+        local r = Value.R or Value[1]
+        local g = Value.G or Value[2]
+        local b = Value.B or Value[3]
+
+        if typeof(r) == "number" and typeof(g) == "number" and typeof(b) == "number" then
+            return Color3.new(r, g, b)
+        end
+    end
+
+    return nil
+end
+
+local function SerializeDropdownEntry(Value)
+    return {
+        Value = tostring(Value),
+        Type = typeof(Value),
+    }
+end
+
+local function SerializeOption(Option)
+    if Option.Type == "Input" then
+        return { Type = "Input", Value = Option.Value }
+    elseif Option.Type == "Slider" then
+        return { Type = "Slider", Value = Option.Value }
+    elseif Option.Type == "Dropdown" then
+        if Option.Multi then
+            local Values = {}
+            for Value, Active in pairs(Option.Value or {}) do
+                if Active then
+                    table.insert(Values, SerializeDropdownEntry(Value))
+                end
+            end
+            return { Type = "Dropdown", Multi = true, Value = Values }
+        end
+
+        return {
+            Type = "Dropdown",
+            Multi = false,
+            Value = Option.Value and SerializeDropdownEntry(Option.Value) or nil,
+        }
+    elseif Option.Type == "KeyPicker" then
+        return {
+            Type = "KeyPicker",
+            Value = Option.Value,
+            Mode = Option.Mode,
+            Modifiers = table.clone(Option.Modifiers or {}),
+        }
+    elseif Option.Type == "ColorPicker" then
+        return {
+            Type = "ColorPicker",
+            Color = SerializeColor3(Option.Value),
+            Transparency = Option.Transparency,
+        }
+    end
+
+    return nil
+end
+
+local function MapDropdownValue(Option, Saved)
+    if Saved == nil then
+        return nil
+    end
+
+    local SavedValue = Saved
+    local SavedType = nil
+
+    if typeof(Saved) == "table" then
+        SavedValue = Saved.Value or Saved[1]
+        SavedType = Saved.Type or Saved.ValueType
+    end
+
+    if SavedValue == nil then
+        return nil
+    end
+
+    if SavedType then
+        for _, Value in ipairs(Option.Values) do
+            if typeof(Value) == SavedType and tostring(Value) == tostring(SavedValue) then
+                return Value
+            end
+        end
+    end
+
+    for _, Value in ipairs(Option.Values) do
+        if tostring(Value) == tostring(SavedValue) then
+            return Value
+        end
+    end
+
+    if table.find(Option.Values, SavedValue) then
+        return SavedValue
+    end
+
+    return nil
+end
+
+local function ApplyOptionValue(Option, Data)
+    if typeof(Data) ~= "table" then
+        return
+    end
+
+    if Data.Type and Data.Type ~= Option.Type then
+        return
+    end
+
+    if Option.Type == "Input" then
+        if Data.Value ~= nil then
+            Option:SetValue(tostring(Data.Value))
+        end
+    elseif Option.Type == "Slider" then
+        if typeof(Data.Value) == "number" then
+            Option:SetValue(Data.Value)
+        end
+    elseif Option.Type == "Dropdown" then
+        if Option.Multi and typeof(Data.Value) == "table" then
+            local Values = {}
+
+            if #Data.Value > 0 then
+                for _, Saved in ipairs(Data.Value) do
+                    local Mapped = MapDropdownValue(Option, Saved)
+                    if Mapped ~= nil then
+                        table.insert(Values, Mapped)
+                    end
+                end
+            else
+                for Saved, Active in pairs(Data.Value) do
+                    if Active then
+                        local Mapped = MapDropdownValue(Option, Saved)
+                        if Mapped ~= nil then
+                            table.insert(Values, Mapped)
+                        end
+                    end
+                end
+            end
+
+            Option:SetValue(Values)
+        elseif not Option.Multi then
+            Option:SetValue(MapDropdownValue(Option, Data.Value))
+        end
+    elseif Option.Type == "KeyPicker" then
+        local Key = Data.Value or Data.Key or "None"
+        local Mode = Data.Mode or Option.Mode
+        local Modifiers = typeof(Data.Modifiers) == "table" and Data.Modifiers or {}
+        Option:SetValue({ Key, Mode, Modifiers })
+    elseif Option.Type == "ColorPicker" then
+        local Color = DeserializeColor3(Data.Color or Data.Value)
+        if Color then
+            local Transparency = typeof(Data.Transparency) == "number" and Data.Transparency or 0
+            Option:SetValueRGB(Color, Transparency)
+        end
+    end
+end
+
+function Library:GetConfig()
+    local Config = {
+        Version = 1,
+        Toggles = {},
+        Options = {},
+    }
+
+    for Idx, Toggle in pairs(Toggles) do
+        Config.Toggles[Idx] = {
+            Type = "Toggle",
+            Value = Toggle.Value,
+        }
+    end
+
+    for Idx, Option in pairs(Options) do
+        local Entry = SerializeOption(Option)
+        if Entry then
+            Config.Options[Idx] = Entry
+        end
+    end
+
+    return Config
+end
+
+function Library:ApplyConfig(Config)
+    if typeof(Config) ~= "table" then
+        return false, "invalid config"
+    end
+
+    if typeof(Config.Toggles) == "table" then
+        for Idx, Entry in pairs(Config.Toggles) do
+            local Toggle = Toggles[Idx]
+            if Toggle and typeof(Entry) == "table" and typeof(Entry.Value) == "boolean" then
+                Toggle:SetValue(Entry.Value)
+            end
+        end
+    end
+
+    if typeof(Config.Options) == "table" then
+        for Idx, Entry in pairs(Config.Options) do
+            local Option = Options[Idx]
+            if Option then
+                ApplyOptionValue(Option, Entry)
+            end
+        end
+    end
+
+    return true, nil
+end
+
+function Library:ResetToDefaults()
+    for _, Toggle in pairs(Toggles) do
+        if Toggle.Default ~= nil then
+            Toggle:SetValue(Toggle.Default)
+        end
+    end
+
+    for _, Option in pairs(Options) do
+        if Option.Type == "Input" then
+            Option:SetValue(Option.Default or "")
+        elseif Option.Type == "Slider" then
+            if typeof(Option.Default) == "number" then
+                Option:SetValue(Option.Default)
+            end
+        elseif Option.Type == "Dropdown" then
+            if Option.Multi then
+                local Values = {}
+                for _, Index in ipairs(Option.Default or {}) do
+                    local Value = Option.DefaultValues and Option.DefaultValues[Index]
+                    if Value ~= nil then
+                        table.insert(Values, Value)
+                    end
+                end
+                Option:SetValue(Values)
+            else
+                local Index = Option.Default and Option.Default[1]
+                local Value = Index and Option.DefaultValues and Option.DefaultValues[Index] or nil
+                Option:SetValue(Value)
+            end
+        elseif Option.Type == "KeyPicker" then
+            local Modifiers = table.clone(Option.DefaultModifiers or {})
+            Option:SetValue({ Option.Default or "None", Option.Mode, Modifiers })
+        elseif Option.Type == "ColorPicker" then
+            local Color = Option.Default or Color3.new(1, 1, 1)
+            local Transparency = Option.DefaultTransparency or 0
+            Option:SetValueRGB(Color, Transparency)
+        end
+    end
+end
+
+function Library:SaveConfig(Name: string)
+    local Normalized = NormalizeConfigName(Name)
+    if not Normalized then
+        return false, "invalid name"
+    end
+
+    if not (writefile and HttpService) then
+        return false, "missing writefile"
+    end
+
+    local ok, err = EnsureFolder(Library.ConfigFolder)
+    if not ok then
+        return false, err
+    end
+
+    local Config = Library:GetConfig()
+    local Encoded
+    local Success, EncodeError = pcall(function()
+        Encoded = HttpService:JSONEncode(Config)
+    end)
+    if not Success then
+        return false, EncodeError
+    end
+
+    writefile(BuildConfigPath(Normalized), Encoded)
+    return true, nil
+end
+
+function Library:LoadConfig(Name: string)
+    local Normalized = NormalizeConfigName(Name)
+    if not Normalized then
+        return false, "invalid name"
+    end
+
+    if not (readfile and isfile and HttpService) then
+        return false, "missing readfile"
+    end
+
+    local Path = BuildConfigPath(Normalized)
+    if not isfile(Path) then
+        return false, "config not found"
+    end
+
+    local Raw = readfile(Path)
+    local Config
+    local Success, DecodeError = pcall(function()
+        Config = HttpService:JSONDecode(Raw)
+    end)
+    if not Success then
+        return false, DecodeError
+    end
+
+    return Library:ApplyConfig(Config)
+end
+
+function Library:DeleteConfig(Name: string)
+    local Normalized = NormalizeConfigName(Name)
+    if not Normalized then
+        return false, "invalid name"
+    end
+
+    if not (delfile and isfile) then
+        return false, "missing delfile"
+    end
+
+    local Path = BuildConfigPath(Normalized)
+    if not isfile(Path) then
+        return false, "config not found"
+    end
+
+    delfile(Path)
+    return true, nil
+end
+
+function Library:ListConfigs()
+    if not listfiles then
+        return {}, "missing listfiles"
+    end
+
+    local ok, err = EnsureFolder(Library.ConfigFolder)
+    if not ok then
+        return {}, err
+    end
+
+    local Files = listfiles(Library.ConfigFolder)
+    local Names = {}
+    for _, File in ipairs(Files) do
+        local FileName = File:gsub("^.*[\\/]", "")
+        if FileName:sub(-#Library.ConfigExtension) == Library.ConfigExtension then
+            local Name = FileName:sub(1, #FileName - #Library.ConfigExtension)
+            table.insert(Names, Name)
+        end
+    end
+
+    table.sort(Names)
+    return Names, nil
 end
 
 function Library:UpdateDependencyBoxes()
@@ -3052,6 +3457,7 @@ do
         end
 
         ColorPicker.Default = ColorPicker.Value
+        ColorPicker.DefaultTransparency = ColorPicker.Transparency
 
         Options[Idx] = ColorPicker
 
