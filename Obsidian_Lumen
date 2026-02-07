@@ -1479,29 +1479,9 @@ function Library:GetCustomIcon(IconName: string)
     end
 end
 
-local function DeepCopy(Value, Seen)
-    if typeof(Value) ~= "table" then
-        return Value
-    end
-
-    if Seen and Seen[Value] then
-        return Seen[Value]
-    end
-
-    local Copy = {}
-    Seen = Seen or {}
-    Seen[Value] = Copy
-
-    for k, v in pairs(Value) do
-        Copy[DeepCopy(k, Seen)] = DeepCopy(v, Seen)
-    end
-
-    return Copy
-end
-
 function Library:Validate(Table: { [string]: any }, Template: { [string]: any }): { [string]: any }
     if typeof(Table) ~= "table" then
-        return DeepCopy(Template)
+        return Template
     end
 
     for k, v in pairs(Template) do
@@ -2660,11 +2640,7 @@ do
             Parent = ToggleLabel,
         })
 
-        local KeybindsToggle = {
-            Normal = KeyPicker.Mode ~= "Toggle",
-            Press = false,
-            FlashTween = nil,
-        }
+        local KeybindsToggle = { Normal = KeyPicker.Mode ~= "Toggle" }
         do
             local Holder = New("TextButton", {
                 BackgroundTransparency = 1,
@@ -2713,19 +2689,6 @@ do
             })
 
             function KeybindsToggle:Display(State)
-                if KeybindsToggle.Press then
-                    Label.TextTransparency = 0
-
-                    if
-                        not KeybindsToggle.FlashTween
-                        or KeybindsToggle.FlashTween.PlaybackState ~= Enum.PlaybackState.Playing
-                    then
-                        CheckImage.ImageTransparency = 1
-                    end
-
-                    return
-                end
-
                 Label.TextTransparency = State and 0 or 0.5
                 CheckImage.ImageTransparency = State and 0 or 1
             end
@@ -2746,43 +2709,9 @@ do
                 Checkbox.Visible = not Normal
             end
 
-            function KeybindsToggle:SetPress(Press)
-                local NewPress = Press == true
-                if KeybindsToggle.Press == NewPress then
-                    return
-                end
-
-                KeybindsToggle.Press = NewPress
-
-                if not KeybindsToggle.Press then
-                    StopTween(KeybindsToggle.FlashTween)
-                    KeybindsToggle.FlashTween = nil
-                end
-            end
-
-            function KeybindsToggle:Flash()
-                if not KeybindsToggle.Press then
-                    return
-                end
-
-                StopTween(KeybindsToggle.FlashTween)
-                CheckImage.ImageTransparency = 0
-                KeybindsToggle.FlashTween = TweenService:Create(
-                    CheckImage,
-                    TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                    { ImageTransparency = 1 }
-                )
-                KeybindsToggle.FlashTween:Play()
-            end
-
             KeyPicker.DoClick = function(...) end --// make luau lsp shut up
             Holder.MouseButton1Click:Connect(function()
                 if KeybindsToggle.Normal then
-                    return
-                end
-
-                if KeybindsToggle.Press then
-                    KeyPicker:DoClick()
                     return
                 end
 
@@ -2875,10 +2804,7 @@ do
             end
 
             local State = KeyPicker:GetState()
-            local IsPressButton = KeyPicker.Mode == "Press"
-                and (ParentObj.Type == "Button" or ParentObj.Type == "SubButton")
             local ShowToggle = Library.ShowToggleFrameInKeybinds and KeyPicker.Mode == "Toggle"
-            local ShowPress = Library.ShowToggleFrameInKeybinds and IsPressButton
 
             if KeyPicker.SyncToggleState and ParentObj.Value ~= State then
                 ParentObj:SetValue(State)
@@ -2886,13 +2812,8 @@ do
 
             if KeybindsToggle.Loaded then
                 if ShowToggle then
-                    KeybindsToggle:SetPress(false)
                     KeybindsToggle:SetNormal(false)
-                elseif ShowPress then
-                    KeybindsToggle:SetNormal(false)
-                    KeybindsToggle:SetPress(true)
                 else
-                    KeybindsToggle:SetPress(false)
                     KeybindsToggle:SetNormal(true)
                 end
 
@@ -2945,10 +2866,6 @@ do
 
             Library:SafeCallback(KeyPicker.Callback, KeyPicker.Toggled)
             Library:SafeCallback(KeyPicker.Clicked, KeyPicker.Toggled)
-
-            if KeybindsToggle.Press then
-                KeybindsToggle:Flash()
-            end
 
             if KeyPicker.Mode == "Press" then
                 KeyPicker.Toggled = false
@@ -3686,11 +3603,7 @@ do
             Data.Text = Params.Text or ""
             Data.DoesWrap = Params.DoesWrap or false
             Data.Size = Params.Size or 14
-            if Params.Visible == nil then
-                Data.Visible = true
-            else
-                Data.Visible = Params.Visible
-            end
+            Data.Visible = Params.Visible or true
             Data.Idx = typeof(Second) == "table" and First or nil
         else
             Data.Text = First or ""
@@ -3809,11 +3722,7 @@ do
 
                 Info.Risky = Params.Risky or false
                 Info.Disabled = Params.Disabled or false
-                if Params.Visible == nil then
-                    Info.Visible = true
-                else
-                    Info.Visible = Params.Visible
-                end
+                Info.Visible = Params.Visible or true
                 Info.Idx = typeof(Second) == "table" and First or nil
             else
                 Info.Text = First or ""
@@ -4256,7 +4165,7 @@ do
         end
 
         function Toggle:SetValue(Value)
-            if Toggle.Value == Value then
+            if Toggle.Disabled then
                 return
             end
 
@@ -4271,10 +4180,8 @@ do
             end
 
             Library:UpdateDependencyBoxes()
-            if not Toggle.Disabled then
-                Library:SafeCallback(Toggle.Callback, Toggle.Value)
-                Library:SafeCallback(Toggle.Changed, Toggle.Value)
-            end
+            Library:SafeCallback(Toggle.Callback, Toggle.Value)
+            Library:SafeCallback(Toggle.Changed, Toggle.Value)
         end
 
         function Toggle:SetDisabled(Disabled: boolean)
@@ -4480,7 +4387,7 @@ do
         end
 
         function Toggle:SetValue(Value)
-            if Toggle.Value == Value then
+            if Toggle.Disabled then
                 return
             end
 
@@ -4495,10 +4402,8 @@ do
             end
 
             Library:UpdateDependencyBoxes()
-            if not Toggle.Disabled then
-                Library:SafeCallback(Toggle.Callback, Toggle.Value)
-                Library:SafeCallback(Toggle.Changed, Toggle.Value)
-            end
+            Library:SafeCallback(Toggle.Callback, Toggle.Value)
+            Library:SafeCallback(Toggle.Changed, Toggle.Value)
         end
 
         function Toggle:SetDisabled(Disabled: boolean)
@@ -4857,9 +4762,8 @@ do
                 end
             end
 
-            local Range = Slider.Max - Slider.Min
-            local X = Range == 0 and 0 or (Slider.Value - Slider.Min) / Range
-            Fill.Size = UDim2.fromScale(math.clamp(X, 0, 1), 1)
+            local X = (Slider.Value - Slider.Min) / (Slider.Max - Slider.Min)
+            Fill.Size = UDim2.fromScale(X, 1)
         end
 
         function Slider:OnChanged(Func)
@@ -4883,6 +4787,10 @@ do
         end
 
         function Slider:SetValue(Str)
+            if Slider.Disabled then
+                return
+            end
+
             local Num = tonumber(Str)
             if not Num or Num == Slider.Value then
                 return
@@ -4893,10 +4801,8 @@ do
             Slider.Value = Num
             Slider:Display()
 
-            if not Slider.Disabled then
-                Library:SafeCallback(Slider.Callback, Slider.Value)
-                Library:SafeCallback(Slider.Changed, Slider.Value)
-            end
+            Library:SafeCallback(Slider.Callback, Slider.Value)
+            Library:SafeCallback(Slider.Changed, Slider.Value)
         end
 
         function Slider:SetDisabled(Disabled: boolean)
@@ -5283,6 +5189,10 @@ do
         end
 
         function Radio:SetValue(Value)
+            if Radio.Disabled then
+                return
+            end
+
             local NewValue
             if Value == nil then
                 NewValue = nil
@@ -5299,9 +5209,7 @@ do
             Radio.Value = NewValue
             Radio:Display()
 
-            if not Radio.Disabled then
-                Library:SafeCallback(Radio.Callback, Radio.Value)
-            end
+            Library:SafeCallback(Radio.Callback, Radio.Value)
         end
 
         function Radio:SetDisabled(Disabled: boolean)
