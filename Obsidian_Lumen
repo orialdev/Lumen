@@ -2001,7 +2001,43 @@ do
         Info = Library:Validate(Info, Templates.KeyPicker)
 
         local ParentObj = self
-        local ToggleLabel = ParentObj.TextLabel
+        local IsButton = ParentObj.Type == "Button" or ParentObj.Type == "SubButton"
+
+        if IsButton then
+            Info.Mode = "Press"
+            Info.Modes = { "Press" }
+            Info.SyncToggleState = false
+
+            if Info.Text == Templates.KeyPicker.Text then
+                Info.Text = ParentObj.Text or Info.Text
+            end
+
+            if Info.Callback == Templates.KeyPicker.Callback or Info.Callback == nil then
+                Info.Callback = function()
+                    if ParentObj.Disabled then
+                        return
+                    end
+
+                    if ParentObj.Press then
+                        ParentObj:Press()
+                    else
+                        Library:SafeCallback(ParentObj.Func)
+                    end
+                end
+            end
+        end
+
+        local ToggleLabel = ParentObj.TextLabel or ParentObj.Base
+        assert(ToggleLabel, "KeyPicker parent is missing.")
+
+        if IsButton and not ToggleLabel:FindFirstChildOfClass("UIListLayout") then
+            New("UIListLayout", {
+                FillDirection = Enum.FillDirection.Horizontal,
+                HorizontalAlignment = Enum.HorizontalAlignment.Right,
+                Padding = UDim.new(0, 6),
+                Parent = ToggleLabel,
+            })
+        end
 
         local KeyPicker = {
             Text = Info.Text,
@@ -2022,7 +2058,10 @@ do
         }
 
         if KeyPicker.Mode == "Press" then
-            assert(ParentObj.Type == "Label", "KeyPicker with the mode 'Press' can be only applied on Labels.")
+            assert(
+                ParentObj.Type == "Label" or IsButton,
+                "KeyPicker with the mode 'Press' can be only applied on Labels or Buttons."
+            )
 
             KeyPicker.SyncToggleState = false
             Info.Modes = { "Press" }
@@ -2393,6 +2432,10 @@ do
         end
 
         function KeyPicker:DoClick()
+            if IsButton and ParentObj.Disabled then
+                return
+            end
+
             if KeyPicker.Mode == "Press" then
                 if KeyPicker.Toggled and Info.WaitForCallback == true then
                     return
@@ -3281,6 +3324,7 @@ do
             Risky = Info.Risky,
             Disabled = Info.Disabled,
             Visible = Info.Visible,
+            Addons = {},
 
             Tween = nil,
             Type = "Button",
@@ -3298,6 +3342,57 @@ do
             Padding = UDim.new(0, 9),
             Parent = Holder,
         })
+
+        local function SetConfirmState(Target, Confirming)
+            if Confirming then
+                Target.Base.Text = "Are you sure?"
+                Target.Base.TextColor3 = Library.Scheme.AccentColor
+                Library.Registry[Target.Base].TextColor3 = "AccentColor"
+            else
+                Target.Base.Text = Target.Text
+                Target.Base.TextColor3 = Target.Risky and Library.Scheme.RedColor or Library.Scheme.FontColor
+                Library.Registry[Target.Base].TextColor3 = Target.Risky and "RedColor" or "FontColor"
+            end
+        end
+
+        local function AttachPress(Target)
+            Target.Confirming = false
+            Target.ConfirmTask = nil
+
+            function Target:Press()
+                if Target.Disabled then
+                    return
+                end
+
+                if Target.DoubleClick then
+                    if Target.Confirming then
+                        Target.Confirming = false
+                        if Target.ConfirmTask then
+                            task.cancel(Target.ConfirmTask)
+                            Target.ConfirmTask = nil
+                        end
+                        SetConfirmState(Target, false)
+                        Library:SafeCallback(Target.Func)
+                        return
+                    end
+
+                    Target.Confirming = true
+                    SetConfirmState(Target, true)
+                    Target.ConfirmTask = task.delay(0.5, function()
+                        if Library.Unloaded then
+                            return
+                        end
+
+                        Target.Confirming = false
+                        Target.ConfirmTask = nil
+                        SetConfirmState(Target, false)
+                    end)
+                    return
+                end
+
+                Library:SafeCallback(Target.Func)
+            end
+        end
 
         local function CreateButton(Button)
             local Base = New("TextButton", {
@@ -3343,37 +3438,14 @@ do
             end)
 
             Button.Base.MouseButton1Click:Connect(function()
-                if Button.Disabled or Button.Locked then
-                    return
-                end
-
-                if Button.DoubleClick then
-                    Button.Locked = true
-
-                    Button.Base.Text = "Are you sure?"
-                    Button.Base.TextColor3 = Library.Scheme.AccentColor
-                    Library.Registry[Button.Base].TextColor3 = "AccentColor"
-
-                    local Clicked = WaitForEvent(Button.Base.MouseButton1Click, 0.5)
-
-                    Button.Base.Text = Button.Text
-                    Button.Base.TextColor3 = Button.Risky and Library.Scheme.RedColor or Library.Scheme.FontColor
-                    Library.Registry[Button.Base].TextColor3 = Button.Risky and "RedColor" or "FontColor"
-
-                    if Clicked then
-                        Library:SafeCallback(Button.Func)
-                    end
-
-                    RunService.RenderStepped:Wait() --// Mouse Button fires without waiting (i hate roblox)
-                    Button.Locked = false
-                    return
-                end
-
-                Library:SafeCallback(Button.Func)
+                Button:Press()
             end)
         end
 
         Button.Base, Button.Stroke = CreateButton(Button)
+        Button.TextLabel = Button.Base
+        Button.AddKeyPicker = BaseAddons.__index.AddKeyPicker
+        AttachPress(Button)
         InitEvents(Button)
 
         function Button:AddButton(...)
@@ -3398,6 +3470,9 @@ do
 
             Button.SubButton = SubButton
             SubButton.Base, SubButton.Stroke = CreateButton(SubButton)
+            SubButton.TextLabel = SubButton.Base
+            SubButton.AddKeyPicker = BaseAddons.__index.AddKeyPicker
+            AttachPress(SubButton)
             InitEvents(SubButton)
 
             function SubButton:UpdateColors()
@@ -3421,6 +3496,15 @@ do
 
                 if SubButton.TooltipTable then
                     SubButton.TooltipTable.Disabled = SubButton.Disabled
+                end
+
+                if SubButton.Confirming then
+                    SubButton.Confirming = false
+                    if SubButton.ConfirmTask then
+                        task.cancel(SubButton.ConfirmTask)
+                        SubButton.ConfirmTask = nil
+                    end
+                    SetConfirmState(SubButton, false)
                 end
 
                 SubButton.Base.Active = not SubButton.Disabled
@@ -3481,6 +3565,15 @@ do
 
             if Button.TooltipTable then
                 Button.TooltipTable.Disabled = Button.Disabled
+            end
+
+            if Button.Confirming then
+                Button.Confirming = false
+                if Button.ConfirmTask then
+                    task.cancel(Button.ConfirmTask)
+                    Button.ConfirmTask = nil
+                end
+                SetConfirmState(Button, false)
             end
 
             Button.Base.Active = not Button.Disabled
